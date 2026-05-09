@@ -154,7 +154,7 @@ fun ListaScreen(
                                 onClick = {
                                     mostraMenu = false
                                     scope.launch {
-                                        val file = ExportUtil.esportaCsv(ctx, tutte.value)
+                                        val file = ExportUtil.esportaCsv(ctx, tutte)
                                         ExportUtil.condividiCsv(ctx, file)
                                     }
                                 }
@@ -304,7 +304,7 @@ fun ListaScreen(
             text = {
                 Text(
                     "Questa operazione eliminerà definitivamente TUTTE le " +
-                    "${tutte.value.size} schede e tutte le foto associate.\n\n" +
+                    "${tutte.size} schede e tutte le foto associate.\n\n" +
                     "I dati non saranno recuperabili in nessun modo.",
                     style = MaterialTheme.typography.bodyMedium
                 )
