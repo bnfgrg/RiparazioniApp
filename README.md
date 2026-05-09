@@ -1,0 +1,117 @@
+# Riparazioni — App gestione officina
+
+App Android **completamente offline** per registrare e tracciare le riparazioni di motoseghe, decespugliatori, soffiatori e altri utensili da giardinaggio.
+
+## Caratteristiche
+
+- Nessuna connessione internet richiesta, dati solo sul telefono
+- Database locale SQLite (Room)
+- Foto dei dispositivi salvate in memoria interna app
+- Numero progressivo automatico (es. #2026-0042)
+- Stati colorati: In attesa / In lavorazione / Pronto / Consegnato
+- Filtri rapidi e ricerca per nome/modello/numero
+- Cancellazione singola con dialog di conferma
+- Cancellazione multipla con tap lungo + selezione
+- Le foto vengono cancellate insieme alla riparazione
+- Generazione PDF etichetta A6 da stampare/condividere
+- Tema chiaro/scuro automatico (segue sistema)
+
+## Come compilare l'APK senza installare nulla in locale
+
+### 1. Crea un repository GitHub
+
+1. Vai su [github.com](https://github.com), crea un nuovo repository (anche privato va bene)
+2. Carica nel repository tutti i file di questo progetto, mantenendo la stessa struttura cartelle
+   - Puoi farlo tramite drag & drop dalla web UI di GitHub
+   - Oppure con `git push` da terminale se preferisci
+
+### 2. Compilazione automatica
+
+Appena fatto il push, GitHub Actions parte da solo e compila l'APK.
+
+Per scaricarlo:
+1. Apri il repository su github.com
+2. Vai nella tab **Actions** (in alto)
+3. Clicca sull'ultima esecuzione (la più recente; deve avere il pallino verde a fianco)
+4. Scendi in fondo alla pagina, sezione **Artifacts**
+5. Clicca su `app-debug-apk` per scaricare uno zip
+6. Estrai lo zip: dentro c'è il file `app-debug.apk`
+
+Tempo di build tipico: 4-6 minuti la prima volta, 2-3 minuti le successive.
+
+### 3. Installa sul telefono
+
+1. Trasferisci `app-debug.apk` sul telefono Android (email, USB, cloud, Telegram a te stesso, ecc.)
+2. Sul telefono, apri il file
+3. Se Android te lo chiede, abilita "Installa app sconosciute" per il file manager o app che stai usando
+4. Conferma installazione
+
+> **Nota**: l'APK è in modalità "debug". Funziona perfettamente per uso personale. Se in futuro vorrai distribuirlo (es. su Play Store o ad altri), servirà una firma di release con keystore: in tal caso si modifica il workflow per aggiungere quel passo.
+
+## Permessi richiesti
+
+- **Fotocamera**: per scattare foto dei dispositivi
+
+Nessun permesso di rete è dichiarato nel manifest, l'app **non può** comunicare con internet.
+
+## Requisiti
+
+- Android 10 (API 29) o superiore
+
+## Struttura del progetto
+
+```
+RiparazioniApp/
+├── .github/workflows/build.yml   # Pipeline GitHub Actions
+├── app/
+│   ├── build.gradle.kts          # Config build modulo app
+│   ├── proguard-rules.pro
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── java/it/officina/riparazioni/
+│       │   ├── MainActivity.kt           # Punto ingresso + navigation
+│       │   ├── RiparazioniApp.kt         # Application class
+│       │   ├── data/                     # Room: entity, DAO, database, repo
+│       │   ├── ui/
+│       │   │   ├── RiparazioneViewModel.kt
+│       │   │   ├── components/Components.kt
+│       │   │   ├── screens/ListaScreen.kt
+│       │   │   ├── screens/DettaglioScreen.kt
+│       │   │   └── theme/Theme.kt
+│       │   └── util/                     # PDF, foto, date
+│       └── res/                          # Risorse XML
+├── build.gradle.kts                # Config root
+├── settings.gradle.kts
+├── gradle.properties
+└── README.md
+```
+
+## Stack tecnico
+
+- Kotlin 1.9.22
+- Jetpack Compose (UI)
+- Material 3
+- Room 2.6.1 (database)
+- CameraX 1.3.1
+- Coil 2.5.0 (caricamento immagini)
+- Coroutines + Flow
+- Min SDK 29, Target SDK 34
+- Compilato con JDK 17, Gradle 8.5, Android Gradle Plugin 8.2.2
+
+## Risoluzione problemi comuni
+
+**Il build fallisce su GitHub Actions con un errore di "Could not resolve..."**
+Quasi sempre è un problema temporaneo dei repository Maven. Riprova lanciando il workflow di nuovo dalla tab Actions → "Run workflow".
+
+**Il build fallisce con errori di KSP/Room**
+Verifica che `kotlin-android` e `ksp` abbiano versioni compatibili in `build.gradle.kts` (root). Le versioni qui usate (Kotlin 1.9.22 + KSP 1.9.22-1.0.17) sono allineate.
+
+**L'APK si installa ma crasha all'avvio**
+Possibile cause: device con Android < 10 (non supportato). Verifica nelle Impostazioni → Info telefono.
+
+## Note tecniche
+
+- Il database è creato al primo avvio dell'app, vuoto.
+- Le foto sono salvate in `[memoria interna app]/files/photos/`.
+- I PDF generati sono salvati in `[memoria interna app]/files/pdf/`.
+- Tutto viene rimosso disinstallando l'app. Se vuoi backup persistenti, copia il database con root o usa un'app di backup di sistema (Google Drive backup, ecc.).
