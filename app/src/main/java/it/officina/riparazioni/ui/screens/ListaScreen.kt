@@ -330,7 +330,7 @@ fun ListaScreen(
     // === DIALOG: elimina risultati filtrati ===
     if (mostraDialogEliminaFiltrati) {
         val descFiltro = buildString {
-            if (query.isNotEmpty()) append("cliente/modello: "$query"")
+            if (query.isNotEmpty()) append("cliente/modello: '$query'")
             if (query.isNotEmpty() && filtro != FiltroStato.TUTTI) append(" · ")
             if (filtro != FiltroStato.TUTTI) append("stato: ${filtro.name.lowercase().replace("_", " ")}")
         }
