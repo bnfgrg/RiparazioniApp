@@ -102,8 +102,10 @@ fun ListaScreen(
     var mostraDialogCancellaAll by remember { mutableStateOf(false) }
     var mostraDialogCancellaConferma by remember { mutableStateOf(false) }
     var mostraDialogPathFoto by remember { mutableStateOf(false) }
+    var mostraDialogEliminaFiltrati by remember { mutableStateOf(false) }
 
     val inSelezione = selezione.isNotEmpty()
+    val haFiltriAttivi = query.isNotEmpty() || filtro != FiltroStato.TUTTI
 
     Scaffold(
         topBar = {
@@ -239,6 +241,35 @@ fun ListaScreen(
                         { vm.setFiltro(FiltroStato.CONSEGNATI) })
                 }
                 Spacer(Modifier.height(4.dp))
+
+                // Banner risultati filtrati + pulsante elimina filtrati
+                if (haFiltriAttivi && items.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${items.size} risultat${if (items.size == 1) "o" else "i"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(
+                            onClick = { mostraDialogEliminaFiltrati = true },
+                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                contentColor = ColorDanger
+                            )
+                        ) {
+                            Icon(Icons.Default.Delete, null,
+                                modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.size(4.dp))
+                            Text("Elimina risultati",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
             }
 
             if (items.isEmpty()) {
@@ -293,6 +324,48 @@ fun ListaScreen(
                 mostraDialog = false
             },
             onAnnulla = { mostraDialog = false }
+        )
+    }
+
+    // === DIALOG: elimina risultati filtrati ===
+    if (mostraDialogEliminaFiltrati) {
+        val descFiltro = buildString {
+            if (query.isNotEmpty()) append("cliente/modello: "$query"")
+            if (query.isNotEmpty() && filtro != FiltroStato.TUTTI) append(" · ")
+            if (filtro != FiltroStato.TUTTI) append("stato: ${filtro.name.lowercase().replace("_", " ")}")
+        }
+        AlertDialog(
+            onDismissRequest = { mostraDialogEliminaFiltrati = false },
+            title = { Text("Elimina ${items.size} riparazioni?") },
+            text = {
+                Column {
+                    Text(
+                        "Verranno eliminate definitivamente le ${items.size} riparazioni " +
+                        "attualmente visibili ($descFiltro), insieme alle foto associate.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Operazione non annullabile.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ColorDanger
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.eliminaFiltrate()
+                        mostraDialogEliminaFiltrati = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = ColorDanger
+                    )
+                ) { Text("Elimina") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostraDialogEliminaFiltrati = false }) { Text("Annulla") }
+            }
         )
     }
 

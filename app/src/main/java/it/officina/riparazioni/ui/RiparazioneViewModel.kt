@@ -77,6 +77,16 @@ class RiparazioneViewModel(
             onDone()
         }
     }
+
+    /**
+     * Elimina solo le riparazioni attualmente visibili (filtrate per query+stato).
+     */
+    fun eliminaFiltrate(onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repo.deleteMany(filtrate.value)
+            onDone()
+        }
+    }
 }
 
 class RiparazioneVMFactory(private val repo: RiparazioneRepository) : ViewModelProvider.Factory {

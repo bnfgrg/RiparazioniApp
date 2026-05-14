@@ -114,12 +114,14 @@ fun DettaglioScreen(
 
     val r = rip!!
 
-    // Permission camera
-    val camPerm = rememberPermissionState(android.Manifest.permission.CAMERA)
-
-
     // Stato file foto in attesa
     var pendingPhotoPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var camPermGranted by remember { mutableStateOf(false) }
+
+    // Launcher permesso camera
+    val camPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted -> camPermGranted = granted }
 
     // Launcher per scattare foto
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -129,6 +131,12 @@ fun DettaglioScreen(
             rip = rip!!.copy(fotoPaths = rip!!.fotoPaths + pendingPhotoPath!!)
         }
         pendingPhotoPath = null
+    }
+
+    // Controlla permesso camera al primo avvio
+    LaunchedEffect(Unit) {
+        camPermGranted = ctx.checkSelfPermission(android.Manifest.permission.CAMERA) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     fun avviaFoto() {
@@ -172,8 +180,8 @@ fun DettaglioScreen(
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable {
-                            if (camPerm.status.isGranted) avviaFoto()
-                            else camPerm.launchPermissionRequest()
+                            if (camPermGranted) avviaFoto()
+                            else camPermLauncher.launch(android.Manifest.permission.CAMERA)
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -233,8 +241,8 @@ fun DettaglioScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable {
-                                    if (camPerm.status.isGranted) avviaFoto()
-                                    else camPerm.launchPermissionRequest()
+                                    if (camPermGranted) avviaFoto()
+                                    else camPermLauncher.launch(android.Manifest.permission.CAMERA)
                                 },
                             contentAlignment = Alignment.Center
                         ) {

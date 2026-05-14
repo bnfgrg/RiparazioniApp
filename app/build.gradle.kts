@@ -83,6 +83,4 @@ dependencies {
     // Coil per immagini
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // Permission accompanist
-    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 }
