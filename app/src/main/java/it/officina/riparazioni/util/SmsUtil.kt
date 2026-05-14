@@ -22,6 +22,20 @@ object SmsUtil {
         ctx.startActivity(intent)
     }
 
+    /**
+     * SMS inviato alla creazione della scheda: conferma presa in carico.
+     */
+    fun messaggioPresaInCarico(r: Riparazione): String {
+        return "Gentile ${r.cliente}, la riparazione del suo" +
+               " ${r.tipoDispositivo.label}" +
+               (if (r.marcaModello.isNotEmpty()) " ${r.marcaModello}" else "") +
+               " (rif. #${r.numeroProgressivo}) e' stata presa in carico." +
+               " La avviseremo appena pronta. Grazie!\n— FERRAMENTA EMG"
+    }
+
+    /**
+     * SMS inviato quando la riparazione e' pronta per il ritiro.
+     */
     fun messaggioPredefinto(r: Riparazione): String {
         return "Gentile ${r.cliente}, la sua ${r.tipoDispositivo.label}" +
                (if (r.marcaModello.isNotEmpty()) " ${r.marcaModello}" else "") +

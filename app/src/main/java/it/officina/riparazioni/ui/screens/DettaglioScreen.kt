@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +31,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -63,10 +64,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import com.google.accompanist.permissions.rememberPermissionState
 import it.officina.riparazioni.R
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.data.StatoRiparazione
@@ -80,13 +77,11 @@ import it.officina.riparazioni.ui.theme.ColorLavorazione
 import it.officina.riparazioni.ui.theme.ColorPronto
 import it.officina.riparazioni.util.DateFmt
 import it.officina.riparazioni.util.PdfUtil
-import it.officina.riparazioni.util.WhatsAppUtil
-import it.officina.riparazioni.util.ContactUtil
 import it.officina.riparazioni.util.SmsUtil
 import it.officina.riparazioni.util.PhotoUtil
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DettaglioScreen(
     vm: RiparazioneViewModel,
@@ -122,13 +117,6 @@ fun DettaglioScreen(
     // Permission camera
     val camPerm = rememberPermissionState(android.Manifest.permission.CAMERA)
 
-    // Permesso rubrica (per salvataggio contatto silenzioso)
-    val rubricaPerm = rememberMultiplePermissionsState(
-        listOf(
-            android.Manifest.permission.READ_CONTACTS,
-            android.Manifest.permission.WRITE_CONTACTS
-        )
-    )
 
     // Stato file foto in attesa
     var pendingPhotoPath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -278,8 +266,23 @@ fun DettaglioScreen(
                 value = r.telefono,
                 onValueChange = { rip = r.copy(telefono = it) },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
+            // Pulsante SMS preso in carico (visibile solo su nuova scheda con telefono compilato)
+            if (r.telefono.isNotEmpty() && (riparazioneId == null || riparazioneId == 0L)) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPresaInCarico(r))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text("Invia SMS preso in carico")
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
 
@@ -393,14 +396,6 @@ fun DettaglioScreen(
             // === AZIONI PRIMARIE ===
             Button(
                 onClick = {
-                    // Salva il contatto in rubrica in modo silenzioso se ha telefono
-                    if (r.telefono.isNotEmpty() && r.cliente.isNotEmpty()) {
-                        if (rubricaPerm.allPermissionsGranted) {
-                            ContactUtil.aggiungiSeNonEsiste(ctx, r.cliente, r.telefono)
-                        } else {
-                            rubricaPerm.launchMultiplePermissionRequest()
-                        }
-                    }
                     vm.salva(r) { onIndietro() }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -426,41 +421,19 @@ fun DettaglioScreen(
                 Text(stringResource(R.string.stampa_etichetta))
             }
 
-            // === NOTIFICA CLIENTE (WhatsApp + SMS) ===
+            // === NOTIFICA PRONTO via SMS ===
             if (r.telefono.isNotEmpty() &&
                 (r.stato == StatoRiparazione.PRONTO || r.stato == StatoRiparazione.CONSEGNATO)) {
                 Spacer(Modifier.height(8.dp))
-                val whatsappInstallato = WhatsAppUtil.isInstallato(ctx)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                OutlinedButton(
+                    onClick = {
+                        SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPredefinto(r))
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Pulsante WhatsApp
-                    OutlinedButton(
-                        onClick = {
-                            WhatsAppUtil.apriChat(ctx, r.telefono, WhatsAppUtil.messaggioPredefinto(r))
-                        },
-                        enabled = whatsappInstallato,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Send, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text(
-                            if (whatsappInstallato) "WhatsApp" else "WA n/d",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    // Pulsante SMS
-                    OutlinedButton(
-                        onClick = {
-                            SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPredefinto(r))
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text("SMS", style = MaterialTheme.typography.bodySmall)
-                    }
+                    Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text("Notifica SMS pronto per il ritiro")
                 }
             }
 
