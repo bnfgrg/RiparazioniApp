@@ -277,20 +277,7 @@ fun DettaglioScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
-            // Pulsante SMS preso in carico (visibile solo su nuova scheda con telefono compilato)
-            if (r.telefono.isNotEmpty() && (riparazioneId == null || riparazioneId == 0L)) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPresaInCarico(r))
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text("Invia SMS preso in carico")
-                }
-            }
+
 
             Spacer(Modifier.height(16.dp))
 
@@ -402,6 +389,21 @@ fun DettaglioScreen(
             Spacer(Modifier.height(20.dp))
 
             // === AZIONI PRIMARIE ===
+            // Pulsante SMS preso in carico (solo nuova scheda con telefono compilato)
+            if (r.telefono.isNotEmpty() && (riparazioneId == null || riparazioneId == 0L)) {
+                OutlinedButton(
+                    onClick = {
+                        SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPresaInCarico(r))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text("Invia SMS preso in carico")
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
             Button(
                 onClick = {
                     vm.salva(r) { onIndietro() }
