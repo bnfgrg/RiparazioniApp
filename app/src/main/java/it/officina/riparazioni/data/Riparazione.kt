@@ -40,10 +40,13 @@ data class Riparazione(
     val marcaModello: String = "",
     val problema: String = "",
     val noteInterne: String = "",
-    val prezzoRiparazione: String = "",          // testo libero es. "45,00"
+    val prezzoRiparazione: String = "",
     val stato: StatoRiparazione = StatoRiparazione.IN_ATTESA,
     val dataIngresso: Long = System.currentTimeMillis(),
-    val dataPronto: Long? = null,                // timestamp cambio stato -> PRONTO
-    val dataConsegna: Long? = null,              // timestamp cambio stato -> CONSEGNATO
+    val dataPronto: Long? = null,
+    val dataConsegna: Long? = null,
+    // Timer lavoro effettivo
+    val tempoLavoroMs: Long = 0L,          // millisecondi totali accumulati in IN_LAVORAZIONE
+    val timerAvviatoAl: Long? = null,      // timestamp inizio ultima sessione di lavoro (null = timer fermo)
     val fotoPaths: List<String> = emptyList()
 )

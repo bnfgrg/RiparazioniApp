@@ -1,19 +1,11 @@
 package it.officina.riparazioni.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -21,64 +13,35 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import it.officina.riparazioni.BuildConfig
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import it.officina.riparazioni.BuildConfig
 import it.officina.riparazioni.R
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.ui.FiltroStato
 import it.officina.riparazioni.ui.RiparazioneViewModel
-import it.officina.riparazioni.ui.components.ChipFiltro
-import it.officina.riparazioni.ui.components.ConfermaDialog
-import it.officina.riparazioni.ui.components.PallinoStato
-import it.officina.riparazioni.ui.theme.ColorAttesa
-import it.officina.riparazioni.ui.theme.ColorConsegnato
-import it.officina.riparazioni.ui.theme.ColorDanger
-import it.officina.riparazioni.ui.theme.ColorDangerBg
-import it.officina.riparazioni.ui.theme.ColorLavorazione
-import it.officina.riparazioni.ui.theme.ColorPronto
+import it.officina.riparazioni.ui.components.*
+import it.officina.riparazioni.ui.theme.*
 import it.officina.riparazioni.util.DateFmt
 import it.officina.riparazioni.util.ExportUtil
 import kotlinx.coroutines.launch
+
+// Modalità di import
+private enum class ModalitaImport { TOTALE, AGGIUNTIVA_SOVRASCRIVI, AGGIUNTIVA_NUOVI }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -87,95 +50,94 @@ fun ListaScreen(
     onApri: (Long) -> Unit,
     onNuova: () -> Unit
 ) {
-    val items by vm.filtrate.collectAsStateWithLifecycle()
-    val query by vm.query.collectAsStateWithLifecycle()
+    val items  by vm.filtrate.collectAsStateWithLifecycle()
+    val query  by vm.query.collectAsStateWithLifecycle()
     val filtro by vm.filtro.collectAsStateWithLifecycle()
-    val tutte by vm.tutte.collectAsStateWithLifecycle()
+    val tutte  by vm.tutte.collectAsStateWithLifecycle()
 
     var selezione by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var mostraDialog by remember { mutableStateOf(false) }
 
-    // Menu principale
-    val ctx = LocalContext.current
+    val ctx   = LocalContext.current
     val scope = rememberCoroutineScope()
-    var mostraMenu by remember { mutableStateOf(false) }
-    var mostraDialogCancellaAll by remember { mutableStateOf(false) }
+
+    // Stato menu e dialogs
+    var mostraMenu                  by remember { mutableStateOf(false) }
+    var mostraDialogCancellaAll     by remember { mutableStateOf(false) }
     var mostraDialogCancellaConferma by remember { mutableStateOf(false) }
-    var mostraDialogPathFoto by remember { mutableStateOf(false) }
+    var mostraDialogPathFoto        by remember { mutableStateOf(false) }
     var mostraDialogEliminaFiltrati by remember { mutableStateOf(false) }
 
-    val inSelezione = selezione.isNotEmpty()
+    // Import CSV state
+    var csvRighe          by remember { mutableStateOf<List<Riparazione>?>(null) }
+    var mostraDialogImport     by remember { mutableStateOf(false) }
+    var mostraDialogImportMode by remember { mutableStateOf(false) }
+    var mostraDialogImportDupl by remember { mutableStateOf(false) }
+    var importResult       by remember { mutableStateOf<String?>(null) }
+    var importError        by remember { mutableStateOf<String?>(null) }
+    var importModeScelta   by remember { mutableStateOf(ModalitaImport.TOTALE) }
+
+    // Launcher per scegliere il file CSV
+    val csvPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            csvRighe = ExportUtil.leggiCsv(ctx, uri)
+            mostraDialogImport = true
+        } catch (e: Exception) {
+            importError = "Errore lettura file: ${e.message}"
+        }
+    }
+
+    val inSelezione   = selezione.isNotEmpty()
     val haFiltriAttivi = query.isNotEmpty() || filtro != FiltroStato.TUTTI
 
     Scaffold(
         topBar = {
             if (inSelezione) {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.n_selezionate, selezione.size)) },
-                    navigationIcon = {
-                        IconButton(onClick = { selezione = emptySet() }) {
-                            Icon(Icons.Default.Close, "Esci selezione")
-                        }
-                    },
+                    title = { Text("${selezione.size} selezionate") },
+                    navigationIcon = { IconButton(onClick = { selezione = emptySet() }) { Icon(Icons.Default.Close, "Esci") } },
                     actions = {
-                        TextButton(onClick = {
-                            selezione = items.map { it.id }.toSet()
-                        }) { Text(stringResource(R.string.seleziona_tutto)) }
-                        IconButton(onClick = { mostraDialog = true }) {
-                            Icon(Icons.Default.Delete, "Elimina", tint = ColorDanger)
-                        }
+                        TextButton(onClick = { selezione = items.map { it.id }.toSet() }) { Text("Seleziona tutto") }
+                        IconButton(onClick = { mostraDialog = true }) { Icon(Icons.Default.Delete, "Elimina", tint = ColorDanger) }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = ColorDangerBg
-                    )
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ColorDangerBg)
                 )
             } else {
                 TopAppBar(
                     title = {
                         Column {
                             Text(stringResource(R.string.lista_titolo))
-                            Text(
-                                "v${BuildConfig.VERSION_NAME}  build ${BuildConfig.VERSION_CODE}",
+                            Text("v${BuildConfig.VERSION_NAME}  build ${BuildConfig.VERSION_CODE}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     },
                     actions = {
-                        // Pulsante menu
-                        IconButton(onClick = { mostraMenu = true }) {
-                            Icon(Icons.Default.MoreVert, "Menu funzioni")
-                        }
-                        DropdownMenu(
-                            expanded = mostraMenu,
-                            onDismissRequest = { mostraMenu = false }
-                        ) {
+                        IconButton(onClick = { mostraMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
+                        DropdownMenu(expanded = mostraMenu, onDismissRequest = { mostraMenu = false }) {
                             DropdownMenuItem(
                                 text = { Text("Esporta schede (CSV)") },
                                 leadingIcon = { Icon(Icons.Default.FileDownload, null) },
                                 onClick = {
                                     mostraMenu = false
-                                    scope.launch {
-                                        val file = ExportUtil.esportaCsv(ctx, tutte)
-                                        ExportUtil.condividiCsv(ctx, file)
-                                    }
+                                    scope.launch { val f = ExportUtil.esportaCsv(ctx, tutte); ExportUtil.condividiCsv(ctx, f) }
                                 }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Importa da CSV") },
+                                leadingIcon = { Icon(Icons.Default.FileUpload, null) },
+                                onClick = { mostraMenu = false; csvPickerLauncher.launch("text/*") }
                             )
                             DropdownMenuItem(
                                 text = { Text("Cancella tutte le schede") },
                                 leadingIcon = { Icon(Icons.Default.Delete, null, tint = ColorDanger) },
-                                onClick = {
-                                    mostraMenu = false
-                                    mostraDialogCancellaAll = true
-                                }
+                                onClick = { mostraMenu = false; mostraDialogCancellaAll = true }
                             )
                             DropdownMenuItem(
                                 text = { Text("Dove sono salvate le foto") },
                                 leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
-                                onClick = {
-                                    mostraMenu = false
-                                    mostraDialogPathFoto = true
-                                }
+                                onClick = { mostraMenu = false; mostraDialogPathFoto = true }
                             )
                         }
                     }
@@ -188,120 +150,70 @@ fun ListaScreen(
                     onClick = onNuova,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(Icons.Default.Add, stringResource(R.string.nuova_riparazione))
-                }
+                ) { Icon(Icons.Default.Add, "Nuova riparazione") }
             }
         }
     ) { padding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
             if (!inSelezione) {
-                // Barra di ricerca
                 OutlinedTextField(
-                    value = query,
-                    onValueChange = { vm.setQuery(it) },
-                    placeholder = { Text(stringResource(R.string.cerca_placeholder)) },
+                    value = query, onValueChange = { vm.setQuery(it) },
+                    placeholder = { Text("Cerca cliente o modello…") },
                     leadingIcon = { Icon(Icons.Default.Search, null) },
                     singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-
-                // Chip di filtro
                 Row(
-                    modifier = Modifier
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val countAttesa = tutte.count { it.stato.name == "IN_ATTESA" }
-                    val countLav = tutte.count { it.stato.name == "IN_LAVORAZIONE" }
-                    val countPronto = tutte.count { it.stato.name == "PRONTO" }
-                    val countConseg = tutte.count { it.stato.name == "CONSEGNATO" }
-
-                    ChipFiltro("Tutti · ${tutte.size}",
-                        MaterialTheme.colorScheme.primary,
-                        filtro == FiltroStato.TUTTI,
-                        { vm.setFiltro(FiltroStato.TUTTI) })
-                    ChipFiltro("In attesa · $countAttesa", ColorAttesa,
-                        filtro == FiltroStato.ATTESA,
-                        { vm.setFiltro(FiltroStato.ATTESA) })
-                    ChipFiltro("In lavoraz. · $countLav", ColorLavorazione,
-                        filtro == FiltroStato.LAVORAZIONE,
-                        { vm.setFiltro(FiltroStato.LAVORAZIONE) })
-                    ChipFiltro("Pronti · $countPronto", ColorPronto,
-                        filtro == FiltroStato.PRONTI,
-                        { vm.setFiltro(FiltroStato.PRONTI) })
-                    ChipFiltro("Consegnati · $countConseg", ColorConsegnato,
-                        filtro == FiltroStato.CONSEGNATI,
-                        { vm.setFiltro(FiltroStato.CONSEGNATI) })
+                    ChipFiltro("Tutti · ${tutte.size}", MaterialTheme.colorScheme.primary, filtro == FiltroStato.TUTTI) { vm.setFiltro(FiltroStato.TUTTI) }
+                    ChipFiltro("In attesa · ${tutte.count { it.stato.name == "IN_ATTESA" }}", ColorAttesa, filtro == FiltroStato.ATTESA) { vm.setFiltro(FiltroStato.ATTESA) }
+                    ChipFiltro("In lavoraz. · ${tutte.count { it.stato.name == "IN_LAVORAZIONE" }}", ColorLavorazione, filtro == FiltroStato.LAVORAZIONE) { vm.setFiltro(FiltroStato.LAVORAZIONE) }
+                    ChipFiltro("Pronti · ${tutte.count { it.stato.name == "PRONTO" }}", ColorPronto, filtro == FiltroStato.PRONTI) { vm.setFiltro(FiltroStato.PRONTI) }
+                    ChipFiltro("Consegnati · ${tutte.count { it.stato.name == "CONSEGNATO" }}", ColorConsegnato, filtro == FiltroStato.CONSEGNATI) { vm.setFiltro(FiltroStato.CONSEGNATI) }
                 }
-                Spacer(Modifier.height(4.dp))
 
-                // Banner risultati filtrati + pulsante elimina filtrati
                 if (haFiltriAttivi && items.isNotEmpty()) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "${items.size} risultat${if (items.size == 1) "o" else "i"}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("${items.size} risultat${if (items.size == 1) "o" else "i"}",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(
                             onClick = { mostraDialogEliminaFiltrati = true },
-                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                                contentColor = ColorDanger
-                            )
+                            colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)
                         ) {
-                            Icon(Icons.Default.Delete, null,
-                                modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Delete, null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.size(4.dp))
-                            Text("Elimina risultati",
-                                style = MaterialTheme.typography.bodySmall)
+                            Text("Elimina risultati", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
+                Spacer(Modifier.height(4.dp))
             }
 
             if (items.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.lista_vuota),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.lista_vuota), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(4.dp))
-                        Text(stringResource(R.string.lista_vuota_sub),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.lista_vuota_sub), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(bottom = 96.dp)
-                ) {
+                LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
                     items(items, key = { it.id }) { r ->
                         CardRiparazione(
-                            r = r,
-                            inSelezione = inSelezione,
-                            selezionata = selezione.contains(r.id),
+                            r = r, inSelezione = inSelezione, selezionata = selezione.contains(r.id),
                             onTap = {
-                                if (inSelezione) {
-                                    selezione = if (selezione.contains(r.id))
-                                        selezione - r.id else selezione + r.id
-                                } else onApri(r.id)
+                                if (inSelezione) selezione = if (selezione.contains(r.id)) selezione - r.id else selezione + r.id
+                                else onApri(r.id)
                             },
-                            onLongTap = {
-                                if (!inSelezione) selezione = setOf(r.id)
-                            }
+                            onLongTap = { if (!inSelezione) selezione = setOf(r.id) }
                         )
                     }
                 }
@@ -309,25 +221,21 @@ fun ListaScreen(
         }
     }
 
+    // ─── DIALOG cancellazione multipla ─────────────────────────────────────────
     if (mostraDialog) {
         val daEliminare = items.filter { selezione.contains(it.id) }
         ConfermaDialog(
-            titolo = stringResource(R.string.conferma_elimina_multi_titolo, daEliminare.size),
-            testo = stringResource(R.string.conferma_elimina_multi_testo),
-            sottoinfo = daEliminare.take(5).joinToString("\n") {
-                "• ${it.cliente} — ${it.marcaModello}"
-            } + if (daEliminare.size > 5) "\n…e altre ${daEliminare.size - 5}" else "",
-            confermaLabel = stringResource(R.string.elimina),
-            onConferma = {
-                vm.eliminaMultiple(daEliminare)
-                selezione = emptySet()
-                mostraDialog = false
-            },
+            titolo = "Eliminare ${daEliminare.size} riparazioni?",
+            testo = "Verranno rimossi definitivamente i record e tutte le foto associate. Operazione non annullabile.",
+            sottoinfo = daEliminare.take(5).joinToString("\n") { "• ${it.cliente} — ${it.marcaModello}" } +
+                if (daEliminare.size > 5) "\n…e altre ${daEliminare.size - 5}" else "",
+            confermaLabel = "Elimina",
+            onConferma = { vm.eliminaMultiple(daEliminare); selezione = emptySet(); mostraDialog = false },
             onAnnulla = { mostraDialog = false }
         )
     }
 
-    // === DIALOG: elimina risultati filtrati ===
+    // ─── DIALOG elimina filtrati ────────────────────────────────────────────────
     if (mostraDialogEliminaFiltrati) {
         val descFiltro = buildString {
             if (query.isNotEmpty()) append("cliente/modello: '$query'")
@@ -336,99 +244,42 @@ fun ListaScreen(
         }
         AlertDialog(
             onDismissRequest = { mostraDialogEliminaFiltrati = false },
-            title = { Text("Elimina ${items.size} riparazioni?") },
+            title = { Text("Eliminare ${items.size} riparazioni?") },
             text = {
                 Column {
-                    Text(
-                        "Verranno eliminate definitivamente le ${items.size} riparazioni " +
-                        "attualmente visibili ($descFiltro), insieme alle foto associate.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Text("Verranno eliminate definitivamente le ${items.size} riparazioni attualmente visibili ($descFiltro), insieme alle foto associate.", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Operazione non annullabile.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ColorDanger
-                    )
+                    Text("Operazione non annullabile.", style = MaterialTheme.typography.bodySmall, color = ColorDanger)
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.eliminaFiltrate()
-                        mostraDialogEliminaFiltrati = false
-                    },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = ColorDanger
-                    )
-                ) { Text("Elimina") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostraDialogEliminaFiltrati = false }) { Text("Annulla") }
-            }
+            confirmButton = { TextButton(onClick = { vm.eliminaFiltrate(); mostraDialogEliminaFiltrati = false }, colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)) { Text("Elimina") } },
+            dismissButton = { TextButton(onClick = { mostraDialogEliminaFiltrati = false }) { Text("Annulla") } }
         )
     }
 
-    // === DIALOG 1: prima conferma cancella tutto ===
+    // ─── DIALOG cancella tutto (prima conferma) ─────────────────────────────────
     if (mostraDialogCancellaAll) {
         AlertDialog(
             onDismissRequest = { mostraDialogCancellaAll = false },
             title = { Text("Cancella tutte le schede") },
-            text = {
-                Text(
-                    "Questa operazione eliminerà definitivamente TUTTE le " +
-                    "${tutte.size} schede e tutte le foto associate.\n\n" +
-                    "I dati non saranno recuperabili in nessun modo.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        mostraDialogCancellaAll = false
-                        mostraDialogCancellaConferma = true
-                    },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = ColorDanger
-                    )
-                ) { Text("Continua") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostraDialogCancellaAll = false }) { Text("Annulla") }
-            }
+            text = { Text("Questa operazione eliminerà definitivamente TUTTE le ${tutte.size} schede e tutte le foto associate.\n\nI dati non saranno recuperabili in nessun modo.", style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = { TextButton(onClick = { mostraDialogCancellaAll = false; mostraDialogCancellaConferma = true }, colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)) { Text("Continua") } },
+            dismissButton = { TextButton(onClick = { mostraDialogCancellaAll = false }) { Text("Annulla") } }
         )
     }
 
-    // === DIALOG 2: seconda conferma cancella tutto ===
+    // ─── DIALOG cancella tutto (seconda conferma) ───────────────────────────────
     if (mostraDialogCancellaConferma) {
         AlertDialog(
             onDismissRequest = { mostraDialogCancellaConferma = false },
             title = { Text("Sei assolutamente sicuro?") },
-            text = {
-                Text(
-                    "Ultima possibilità: premi ELIMINA TUTTO per confermare.\n\n" +
-                    "Tutti i dati e le foto saranno persi per sempre.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.eliminaTutte()
-                        mostraDialogCancellaConferma = false
-                    },
-                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = ColorDanger
-                    )
-                ) { Text("ELIMINA TUTTO") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostraDialogCancellaConferma = false }) { Text("Annulla") }
-            }
+            text = { Text("Ultima possibilità: premi ELIMINA TUTTO per confermare.\n\nTutti i dati e le foto saranno persi per sempre.", style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = { TextButton(onClick = { vm.eliminaTutte(); mostraDialogCancellaConferma = false }, colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)) { Text("ELIMINA TUTTO") } },
+            dismissButton = { TextButton(onClick = { mostraDialogCancellaConferma = false }) { Text("Annulla") } }
         )
     }
 
-    // === DIALOG: path cartella foto ===
+    // ─── DIALOG path foto ──────────────────────────────────────────────────────
     if (mostraDialogPathFoto) {
         val pathFoto = ExportUtil.pathFoto(ctx)
         AlertDialog(
@@ -436,37 +287,135 @@ fun ListaScreen(
             title = { Text("Cartella foto") },
             text = {
                 Column {
-                    Text(
-                        "Le foto sono salvate nella cartella interna dell'app:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("Le foto sono salvate nella cartella interna dell'app:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(12.dp)
-                    ) {
-                        Text(
-                            pathFoto,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                        )
+                    Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp)) {
+                        Text(pathFoto, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Per accedere usa un file manager con accesso alla memoria interna " +
-                        "(es. Files by Google con 'Mostra file interni' abilitato nelle impostazioni).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("Usa un file manager con accesso alla memoria interna (es. Files by Google con 'Mostra file interni' abilitato).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             confirmButton = {
-                TextButton(onClick = { mostraDialogPathFoto = false }) { Text("OK") }
-            }
+                // PUNTO 3: pulsante apri galleria
+                TextButton(onClick = { ExportUtil.apriCartellaFoto(ctx); mostraDialogPathFoto = false }) { Text("Apri galleria") }
+            },
+            dismissButton = { TextButton(onClick = { mostraDialogPathFoto = false }) { Text("OK") } }
+        )
+    }
+
+    // ─── DIALOG IMPORT: scelta modalità ────────────────────────────────────────
+    if (mostraDialogImport && csvRighe != null) {
+        AlertDialog(
+            onDismissRequest = { mostraDialogImport = false; csvRighe = null },
+            title = { Text("Importa ${csvRighe!!.size} riparazioni") },
+            text = {
+                Column {
+                    Text("Come vuoi importare il file CSV?", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(16.dp))
+                    // Opzione 1: importazione totale
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()
+                        .clickable { importModeScelta = ModalitaImport.TOTALE }) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = importModeScelta == ModalitaImport.TOTALE, onClick = { importModeScelta = ModalitaImport.TOTALE })
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Importazione totale", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text("Cancella il database attuale e lo sostituisce con il file importato", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    // Opzione 2: aggiuntiva
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()
+                        .clickable { importModeScelta = ModalitaImport.AGGIUNTIVA_SOVRASCRIVI }) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = importModeScelta == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI, onClick = { importModeScelta = ModalitaImport.AGGIUNTIVA_SOVRASCRIVI })
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Aggiuntiva (sovrascrivi duplicati)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text("Aggiunge nuove schede; sovrascrive quelle con numero rif. già esistente", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    // Opzione 3: aggiuntiva ignora
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()
+                        .clickable { importModeScelta = ModalitaImport.AGGIUNTIVA_NUOVI }) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = importModeScelta == ModalitaImport.AGGIUNTIVA_NUOVI, onClick = { importModeScelta = ModalitaImport.AGGIUNTIVA_NUOVI })
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Aggiuntiva (salta duplicati)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text("Aggiunge solo schede nuove; ignora quelle con numero rif. già esistente", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    mostraDialogImport = false
+                    if (importModeScelta == ModalitaImport.TOTALE) mostraDialogImportMode = true
+                    else {
+                        scope.launch {
+                            val righe = csvRighe ?: return@launch
+                            val (tot, nuovi, altri) = if (importModeScelta == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
+                                vm.importaAggiuntivaSovrascrivi(righe)
+                            else vm.importaAggiuntivaIgnora(righe)
+                            val label = if (importModeScelta == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
+                                "Importati $tot: $nuovi nuovi, $altri aggiornati" else "Importati $tot: $nuovi nuovi, $altri saltati"
+                            importResult = label; csvRighe = null
+                        }
+                    }
+                }) { Text("Importa") }
+            },
+            dismissButton = { TextButton(onClick = { mostraDialogImport = false; csvRighe = null }) { Text("Annulla") } }
+        )
+    }
+
+    // ─── DIALOG IMPORT TOTALE: doppia conferma ──────────────────────────────────
+    if (mostraDialogImportMode) {
+        AlertDialog(
+            onDismissRequest = { mostraDialogImportMode = false },
+            title = { Text("Importazione totale") },
+            text = { Text("Il database attuale (${tutte.size} schede) verrà cancellato e sostituito con le ${csvRighe?.size ?: 0} schede del file CSV.\n\nI dati attuali non saranno recuperabili.", style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        mostraDialogImportMode = false
+                        scope.launch {
+                            val righe = csvRighe ?: return@launch
+                            val (tot, nuovi, _) = vm.importaTotale(righe)
+                            importResult = "Importazione totale completata: $nuovi schede importate su $tot"
+                            csvRighe = null
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)
+                ) { Text("CONFERMA IMPORTA") }
+            },
+            dismissButton = { TextButton(onClick = { mostraDialogImportMode = false }) { Text("Annulla") } }
+        )
+    }
+
+    // ─── SNACKBAR risultato import ──────────────────────────────────────────────
+    importResult?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { importResult = null },
+            title = { Text("Importazione completata") },
+            text = { Text(msg) },
+            confirmButton = { TextButton(onClick = { importResult = null }) { Text("OK") } }
+        )
+    }
+
+    // ─── DIALOG errore import ───────────────────────────────────────────────────
+    importError?.let { err ->
+        AlertDialog(
+            onDismissRequest = { importError = null },
+            title = { Text("Errore importazione") },
+            text = { Text(err) },
+            confirmButton = { TextButton(onClick = { importError = null }) { Text("OK") } }
         )
     }
 }
@@ -474,107 +423,46 @@ fun ListaScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CardRiparazione(
-    r: Riparazione,
-    inSelezione: Boolean,
-    selezionata: Boolean,
-    onTap: () -> Unit,
-    onLongTap: () -> Unit
+    r: Riparazione, inSelezione: Boolean, selezionata: Boolean,
+    onTap: () -> Unit, onLongTap: () -> Unit
 ) {
-    val ctx = LocalContext.current
     Card(
         shape = RoundedCornerShape(0.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selezionata) ColorDangerBg
-            else MaterialTheme.colorScheme.background
-        ),
+        colors = CardDefaults.cardColors(containerColor = if (selezionata) ColorDangerBg else MaterialTheme.colorScheme.background),
         elevation = CardDefaults.cardElevation(0.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onTap,
-                onLongClick = onLongTap
-            )
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onTap, onLongClick = onLongTap)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (inSelezione) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (selezionata) ColorDanger else Color.Transparent
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (selezionata) {
-                        Icon(
-                            Icons.Default.Check,
-                            null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        )
-                    }
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape)
+                    .background(if (selezionata) ColorDanger else Color.Transparent), contentAlignment = Alignment.Center) {
+                    if (selezionata) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    else Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant))
                 }
                 Spacer(Modifier.size(12.dp))
             }
-
-            // Foto miniatura
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
                 if (r.fotoPaths.isNotEmpty()) {
-                    AsyncImage(
-                        model = r.fotoPaths.first(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    AsyncImage(model = r.fotoPaths.first(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 } else {
                     Text("📷", fontSize = 18.sp)
                 }
             }
-
             Spacer(Modifier.size(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    r.cliente.ifEmpty { "Senza nome" },
-                    fontWeight = FontWeight.Medium,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    r.marcaModello.ifEmpty { r.tipoDispositivo.label },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "#${r.numeroProgressivo} · ${DateFmt.short(r.dataIngresso)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(r.cliente.ifEmpty { "Senza nome" }, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyLarge)
+                Text(r.marcaModello.ifEmpty { r.tipoDispositivo.label }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("#${r.numeroProgressivo} · ${DateFmt.short(r.dataIngresso)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Mostra tempo lavoro se > 0
+                    if (r.tempoLavoroMs > 0 || r.timerAvviatoAl != null) {
+                        val extra = if (r.timerAvviatoAl != null) System.currentTimeMillis() - r.timerAvviatoAl else 0L
+                        Text("⏱ ${DateFmt.durata(r.tempoLavoroMs + extra)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
-
             PallinoStato(r.stato)
         }
-        // separatore
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        )
+        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(MaterialTheme.colorScheme.surfaceVariant))
     }
 }
