@@ -225,11 +225,11 @@ fun ListaScreen(
                     val cLav   = tutte.count { it.stato.name == "IN_LAVORAZIONE" }
                     val cPron  = tutte.count { it.stato.name == "PRONTO" }
                     val cCons  = tutte.count { it.stato.name == "CONSEGNATO" }
-                    ChipFiltro("Tutti · ${tutte.size}", MaterialTheme.colorScheme.primary, filtro == FiltroStato.TUTTI) { vm.setFiltro(FiltroStato.TUTTI) }
-                    ChipFiltro("In attesa · $cAttesa", ColorAttesa, filtro == FiltroStato.ATTESA) { vm.setFiltro(FiltroStato.ATTESA) }
-                    ChipFiltro("In lavoraz. · $cLav", ColorLavorazione, filtro == FiltroStato.LAVORAZIONE) { vm.setFiltro(FiltroStato.LAVORAZIONE) }
-                    ChipFiltro("Pronti · $cPron", ColorPronto, filtro == FiltroStato.PRONTI) { vm.setFiltro(FiltroStato.PRONTI) }
-                    ChipFiltro("Consegnati · $cCons", ColorConsegnato, filtro == FiltroStato.CONSEGNATI) { vm.setFiltro(FiltroStato.CONSEGNATI) }
+                    ChipFiltro("Tutti · ${tutte.size}", MaterialTheme.colorScheme.primary, filtro == FiltroStato.TUTTI, onClick = { vm.setFiltro(FiltroStato.TUTTI) })
+                    ChipFiltro("In attesa · $cAttesa", ColorAttesa, filtro == FiltroStato.ATTESA, onClick = { vm.setFiltro(FiltroStato.ATTESA) })
+                    ChipFiltro("In lavoraz. · $cLav", ColorLavorazione, filtro == FiltroStato.LAVORAZIONE, onClick = { vm.setFiltro(FiltroStato.LAVORAZIONE) })
+                    ChipFiltro("Pronti · $cPron", ColorPronto, filtro == FiltroStato.PRONTI, onClick = { vm.setFiltro(FiltroStato.PRONTI) })
+                    ChipFiltro("Consegnati · $cCons", ColorConsegnato, filtro == FiltroStato.CONSEGNATI, onClick = { vm.setFiltro(FiltroStato.CONSEGNATI) })
                 }
                 if (haFiltriAttivi && items.isNotEmpty()) {
                     Row(
