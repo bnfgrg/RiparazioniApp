@@ -5,26 +5,62 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -32,13 +68,21 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import it.officina.riparazioni.R
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.data.StatoRiparazione
 import it.officina.riparazioni.data.TipoDispositivo
 import it.officina.riparazioni.ui.RiparazioneViewModel
 import it.officina.riparazioni.ui.components.ConfermaDialog
-import it.officina.riparazioni.ui.theme.*
-import it.officina.riparazioni.util.*
+import it.officina.riparazioni.ui.theme.ColorAttesa
+import it.officina.riparazioni.ui.theme.ColorConsegnato
+import it.officina.riparazioni.ui.theme.ColorDanger
+import it.officina.riparazioni.ui.theme.ColorLavorazione
+import it.officina.riparazioni.ui.theme.ColorPronto
+import it.officina.riparazioni.util.DateFmt
+import it.officina.riparazioni.util.PdfUtil
+import it.officina.riparazioni.util.SmsUtil
+import it.officina.riparazioni.util.PhotoUtil
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,84 +98,102 @@ fun DettaglioScreen(
     var rip by remember { mutableStateOf<Riparazione?>(null) }
     var caricato by remember { mutableStateOf(false) }
     var mostraConfermaElimina by remember { mutableStateOf(false) }
-
-    // Foto da ingrandire
+    // MODIFICA 1: stato foto da ingrandire
     var fotoIngrandita by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(riparazioneId) {
-        rip = if (riparazioneId == null || riparazioneId == 0L)
+        rip = if (riparazioneId == null || riparazioneId == 0L) {
             Riparazione(numeroProgressivo = vm.nuovoProgressivo())
-        else vm.byId(riparazioneId) ?: Riparazione(numeroProgressivo = vm.nuovoProgressivo())
+        } else {
+            vm.byId(riparazioneId) ?: Riparazione(numeroProgressivo = vm.nuovoProgressivo())
+        }
         caricato = true
     }
 
     if (!caricato || rip == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Caricamento…") }
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Caricamento…") }
         return
     }
 
     val r = rip!!
 
-    // Permesso camera
-    var camPermGranted by remember { mutableStateOf(false) }
-    val camPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        camPermGranted = it
-    }
     var pendingPhotoPath by rememberSaveable { mutableStateOf<String?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        if (ok && pendingPhotoPath != null) rip = rip!!.copy(fotoPaths = rip!!.fotoPaths + pendingPhotoPath!!)
+    var camPermGranted by remember { mutableStateOf(false) }
+
+    val camPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        camPermGranted = granted
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && pendingPhotoPath != null) rip = rip!!.copy(fotoPaths = rip!!.fotoPaths + pendingPhotoPath!!)
         pendingPhotoPath = null
     }
+
     LaunchedEffect(Unit) {
         camPermGranted = ctx.checkSelfPermission(android.Manifest.permission.CAMERA) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
     }
+
     fun avviaFoto() {
         val file = PhotoUtil.newPhotoFile(ctx)
         pendingPhotoPath = file.absolutePath
-        cameraLauncher.launch(PhotoUtil.uriFor(ctx, file))
+        val uri: Uri = PhotoUtil.uriFor(ctx, file)
+        cameraLauncher.launch(uri)
     }
 
-    // Timer live
+    // MODIFICA 2: timer live
     var tempoCorrente by remember { mutableStateOf(vm.tempoEffettivo(r)) }
     LaunchedEffect(r.timerAvviatoAl, r.tempoLavoroMs) {
         if (r.timerAvviatoAl != null) {
             while (true) {
                 tempoCorrente = vm.tempoEffettivo(rip ?: r)
-                kotlinx.coroutines.delay(30_000L) // aggiorna ogni 30s
+                kotlinx.coroutines.delay(30_000L)
             }
         } else {
             tempoCorrente = r.tempoLavoroMs
         }
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = {
-                Column {
-                    Text(if (riparazioneId == null || riparazioneId == 0L) "Nuova riparazione"
-                         else "Riparazione #${r.numeroProgressivo}")
-                    if (r.stato == StatoRiparazione.IN_LAVORAZIONE && r.timerAvviatoAl != null) {
-                        Text("⏱ ${DateFmt.durata(tempoCorrente)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ColorLavorazione)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            if (riparazioneId == null || riparazioneId == 0L)
+                                stringResource(R.string.dettaglio_titolo_nuova)
+                            else "Riparazione #${r.numeroProgressivo}"
+                        )
+                        // MODIFICA 2: mostra timer live nella toolbar quando in lavorazione
+                        if (r.stato == StatoRiparazione.IN_LAVORAZIONE && r.timerAvviatoAl != null) {
+                            Text(
+                                "⏱ ${DateFmt.durata(tempoCorrente)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ColorLavorazione
+                            )
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onIndietro) {
+                        Icon(Icons.Default.ArrowBack, stringResource(R.string.indietro))
                     }
                 }
-            },
-            navigationIcon = {
-                IconButton(onClick = onIndietro) { Icon(Icons.Default.ArrowBack, "Indietro") }
-            }
-        )
-    }) { padding ->
+            )
+        }
+    ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding)
-                .verticalScroll(rememberScrollState()).padding(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
-
-            // ─── FOTO ───────────────────────────────────────────────────────────
+            // === FOTO ===
             if (r.fotoPaths.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable {
@@ -144,82 +206,106 @@ fun DettaglioScreen(
                         Icon(Icons.Default.PhotoCamera, null, modifier = Modifier.size(36.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(4.dp))
-                        Text("Tocca per scattare foto", style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.scatta_foto), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     items(r.fotoPaths) { path ->
-                        Box(modifier = Modifier.size(160.dp, 120.dp).clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)) {
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp, 120.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
                             AsyncImage(
-                                model = path, contentDescription = null,
+                                model = path,
+                                contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                                    // PUNTO 1: tap sulla foto → ingrandimento
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    // MODIFICA 1: tap sulla thumbnail → ingrandimento
                                     .clickable { fotoIngrandita = path }
                             )
-                            // Pulsante rimozione
                             IconButton(
                                 onClick = {
                                     rip = rip!!.copy(fotoPaths = rip!!.fotoPaths - path)
                                     try { java.io.File(path).delete() } catch (_: Exception) {}
                                 },
-                                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd).padding(4.dp)
                                     .size(28.dp).clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.5f))
-                            ) { Icon(Icons.Default.Close, "Rimuovi", tint = Color.White, modifier = Modifier.size(16.dp)) }
+                            ) {
+                                Icon(Icons.Default.Close, "Rimuovi", tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
                     item {
-                        Box(modifier = Modifier.size(160.dp, 120.dp).clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable {
-                                if (camPermGranted) avviaFoto()
-                                else camPermLauncher.launch(android.Manifest.permission.CAMERA)
-                            },
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp, 120.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable {
+                                    if (camPermGranted) avviaFoto()
+                                    else camPermLauncher.launch(android.Manifest.permission.CAMERA)
+                                },
                             contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.PhotoCamera, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        ) {
+                            Icon(Icons.Default.PhotoCamera, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── CLIENTE ────────────────────────────────────────────────────────
-            EtichettaCampo("Cliente")
+            EtichettaCampo(stringResource(R.string.cliente))
             OutlinedTextField(value = r.cliente, onValueChange = { rip = r.copy(cliente = it) },
                 singleLine = true, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(12.dp))
-            EtichettaCampo("Telefono")
+
+            EtichettaCampo(stringResource(R.string.telefono))
             OutlinedTextField(
                 value = r.telefono, onValueChange = { rip = r.copy(telefono = it) },
                 singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
+            if (r.telefono.isNotEmpty() && (riparazioneId == null || riparazioneId == 0L)) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPresaInCarico(r)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.size(8.dp)); Text("Invia SMS preso in carico")
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── TIPO DISPOSITIVO ───────────────────────────────────────────────
-            EtichettaCampo("Tipo dispositivo")
+            EtichettaCampo(stringResource(R.string.tipo_dispositivo))
             TipoDispositivoDropdown(selected = r.tipoDispositivo, onSelect = { rip = r.copy(tipoDispositivo = it) })
 
             Spacer(Modifier.height(16.dp))
-            EtichettaCampo("Marca e modello")
+
+            EtichettaCampo(stringResource(R.string.marca_modello))
             OutlinedTextField(value = r.marcaModello, onValueChange = { rip = r.copy(marcaModello = it) },
                 singleLine = true, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(12.dp))
-            EtichettaCampo("Problema riscontrato")
+
+            EtichettaCampo(stringResource(R.string.problema))
             OutlinedTextField(value = r.problema, onValueChange = { rip = r.copy(problema = it) },
                 modifier = Modifier.fillMaxWidth().height(100.dp))
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── STATO CON TIMER ────────────────────────────────────────────────
-            EtichettaCampo("Stato")
+            // === STATO CON TIMER (modifica 2) ===
+            EtichettaCampo(stringResource(R.string.stato))
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChipColorato("In attesa", ColorAttesa, r.stato == StatoRiparazione.IN_ATTESA) {
                     rip = vm.applicaCambioStato(r, StatoRiparazione.IN_ATTESA)
@@ -235,46 +321,54 @@ fun DettaglioScreen(
                 }
             }
 
-            // Mostra tempo lavoro accumulato
+            // MODIFICA 2: badge tempo lavoro
             if (tempoCorrente > 0 || r.stato == StatoRiparazione.IN_LAVORAZIONE) {
                 Spacer(Modifier.height(8.dp))
-                val label = if (r.timerAvviatoAl != null) "⏱ In lavorazione da: ${DateFmt.durata(tempoCorrente)}"
-                            else "Tempo lavoro: ${DateFmt.durata(tempoCorrente)}"
+                val timerLabel = if (r.timerAvviatoAl != null)
+                    "⏱ In lavorazione da: ${DateFmt.durata(tempoCorrente)}"
+                else "Tempo lavoro totale: ${DateFmt.durata(tempoCorrente)}"
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = if (r.timerAvviatoAl != null) ColorLavorazione.copy(alpha = 0.15f)
                             else MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    Text(
+                        timerLabel,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (r.timerAvviatoAl != null) ColorLavorazione else MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = if (r.timerAvviatoAl != null) ColorLavorazione
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
             Spacer(Modifier.height(12.dp))
-            EtichettaCampo("Note interne")
+
+            EtichettaCampo(stringResource(R.string.note_interne))
             OutlinedTextField(value = r.noteInterne, onValueChange = { rip = r.copy(noteInterne = it) },
                 modifier = Modifier.fillMaxWidth().height(80.dp))
 
             Spacer(Modifier.height(12.dp))
+
             EtichettaCampo("Prezzo riparazione (€)")
             OutlinedTextField(value = r.prezzoRiparazione, onValueChange = { rip = r.copy(prezzoRiparazione = it) },
                 singleLine = true, placeholder = { Text("es. 45,00") }, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── DATE SOLA LETTURA ──────────────────────────────────────────────
+            // === DATE (sola lettura) ===
             CampoDataLettura("Data ingresso", DateFmt.datetime(r.dataIngresso))
             if (r.dataPronto != null) { Spacer(Modifier.height(6.dp)); CampoDataLettura("Pronto il", DateFmt.datetime(r.dataPronto)) }
             if (r.dataConsegna != null) { Spacer(Modifier.height(6.dp)); CampoDataLettura("Consegnato il", DateFmt.datetime(r.dataConsegna)) }
 
             Spacer(Modifier.height(20.dp))
 
-            // ─── AZIONI ─────────────────────────────────────────────────────────
-            // SMS preso in carico (solo nuova scheda con telefono)
+            // === AZIONI ===
             if (r.telefono.isNotEmpty() && (riparazioneId == null || riparazioneId == 0L)) {
-                OutlinedButton(onClick = { SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPresaInCarico(r)) },
-                    modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPresaInCarico(r)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.size(8.dp)); Text("Invia SMS preso in carico")
                 }
@@ -282,29 +376,38 @@ fun DettaglioScreen(
             }
 
             Button(onClick = { vm.salva(r) { onIndietro() } }, modifier = Modifier.fillMaxWidth()) {
-                Text("Salva")
+                Text(stringResource(R.string.salva))
             }
 
             Spacer(Modifier.height(8.dp))
+
             OutlinedButton(
-                onClick = { scope.launch { vm.salva(r) { id -> val rec = r.copy(id = id); val pdf = PdfUtil.generaEtichetta(ctx, rec); PdfUtil.condividi(ctx, pdf) } } },
+                onClick = {
+                    scope.launch {
+                        vm.salva(r) { id ->
+                            val rec = r.copy(id = id)
+                            val pdf = PdfUtil.generaEtichetta(ctx, rec)
+                            PdfUtil.condividi(ctx, pdf)
+                        }
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.PictureAsPdf, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp)); Text("Stampa etichetta")
+                Spacer(Modifier.size(8.dp)); Text(stringResource(R.string.stampa_etichetta))
             }
 
-            // SMS notifica pronto
             if (r.telefono.isNotEmpty() && (r.stato == StatoRiparazione.PRONTO || r.stato == StatoRiparazione.CONSEGNATO)) {
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPredefinto(r)) },
-                    modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { SmsUtil.apriSms(ctx, r.telefono, SmsUtil.messaggioPredefinto(r)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.size(8.dp)); Text("Notifica SMS pronto per il ritiro")
                 }
             }
 
-            // Elimina (solo schede esistenti)
             if (riparazioneId != null && riparazioneId != 0L) {
                 Spacer(Modifier.height(24.dp))
                 Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(MaterialTheme.colorScheme.surfaceVariant))
@@ -315,34 +418,33 @@ fun DettaglioScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp)); Text("Elimina riparazione")
+                    Spacer(Modifier.size(8.dp)); Text(stringResource(R.string.elimina_riparazione))
                 }
             }
+
             Spacer(Modifier.height(24.dp))
         }
     }
 
-    // Dialog conferma eliminazione
     if (mostraConfermaElimina) {
         ConfermaDialog(
-            titolo = "Eliminare la riparazione?",
-            testo = "Verranno rimossi definitivamente il record e le foto associate. Operazione non annullabile.",
+            titolo = stringResource(R.string.conferma_elimina_titolo),
+            testo = stringResource(R.string.conferma_elimina_testo),
             sottoinfo = "${r.cliente}\n${r.tipoDispositivo.label} — ${r.marcaModello}\n#${r.numeroProgressivo}",
-            confermaLabel = "Elimina",
+            confermaLabel = stringResource(R.string.elimina),
             onConferma = { vm.elimina(r); mostraConfermaElimina = false; onIndietro() },
             onAnnulla = { mostraConfermaElimina = false }
         )
     }
 
-    // PUNTO 1: Viewer foto a schermo intero
+    // MODIFICA 1: viewer foto fullscreen
     if (fotoIngrandita != null) {
         Dialog(
             onDismissRequest = { fotoIngrandita = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black)
-                    .clickable { fotoIngrandita = null },
+                modifier = Modifier.fillMaxSize().background(Color.Black).clickable { fotoIngrandita = null },
                 contentAlignment = Alignment.Center
             ) {
                 AsyncImage(
@@ -355,7 +457,9 @@ fun DettaglioScreen(
                     onClick = { fotoIngrandita = null },
                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                         .size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
-                ) { Icon(Icons.Default.Close, "Chiudi", tint = Color.White) }
+                ) {
+                    Icon(Icons.Default.Close, "Chiudi", tint = Color.White)
+                }
             }
         }
     }
@@ -380,6 +484,24 @@ private fun TipoDispositivoDropdown(selected: TipoDispositivo, onSelect: (TipoDi
 }
 
 @Composable
+private fun CampoDataLettura(label: String, valore: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        EtichettaCampo(label)
+        Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(valore, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun EtichettaCampo(text: String) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp), fontSize = 11.sp, letterSpacing = 0.5.sp)
+}
+
+@Composable
 private fun ChipColorato(label: String, color: Color, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier.clip(RoundedCornerShape(50))
@@ -390,21 +512,4 @@ private fun ChipColorato(label: String, color: Color, selected: Boolean, onClick
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             color = if (selected) color else MaterialTheme.colorScheme.onSurfaceVariant)
     }
-}
-
-@Composable
-private fun CampoDataLettura(label: String, valore: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        EtichettaCampo(label)
-        Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 14.dp, vertical = 10.dp)
-        ) { Text(valore, style = MaterialTheme.typography.bodyMedium) }
-    }
-}
-
-@Composable
-private fun EtichettaCampo(text: String) {
-    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 4.dp), fontSize = 11.sp, letterSpacing = 0.5.sp)
 }

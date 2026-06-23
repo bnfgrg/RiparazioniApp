@@ -1,10 +1,16 @@
 package it.officina.riparazioni.data
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RiparazioneDao {
+
     @Query("SELECT * FROM riparazioni ORDER BY dataIngresso DESC")
     fun getAll(): Flow<List<Riparazione>>
 
@@ -16,6 +22,9 @@ interface RiparazioneDao {
 
     @Query("SELECT COUNT(*) FROM riparazioni WHERE numeroProgressivo LIKE :prefix || '%'")
     suspend fun countByPrefix(prefix: String): Int
+
+    @Query("SELECT * FROM riparazioni WHERE numeroProgressivo = :num LIMIT 1")
+    suspend fun getByProgressivo(num: String): Riparazione?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(r: Riparazione): Long
@@ -32,12 +41,9 @@ interface RiparazioneDao {
     @Query("DELETE FROM riparazioni WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<Long>)
 
-    @Query("DELETE FROM riparazioni")
-    suspend fun deleteAll()
-
     @Query("SELECT DISTINCT cliente FROM riparazioni ORDER BY cliente")
     fun getClientiDistinti(): Flow<List<String>>
 
-    @Query("SELECT * FROM riparazioni WHERE numeroProgressivo = :num LIMIT 1")
-    suspend fun getByProgressivo(num: String): Riparazione?
+    @Query("DELETE FROM riparazioni")
+    suspend fun deleteAll()
 }

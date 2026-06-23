@@ -7,15 +7,17 @@ import java.util.Calendar
 class RiparazioneRepository(private val dao: RiparazioneDao) {
 
     fun all(): Flow<List<Riparazione>> = dao.getAll()
-    fun byCliente(c: String): Flow<List<Riparazione>> = dao.getByCliente(c)
+    fun byCliente(cliente: String): Flow<List<Riparazione>> = dao.getByCliente(cliente)
     fun clientiDistinti(): Flow<List<String>> = dao.getClientiDistinti()
+
     suspend fun byId(id: Long): Riparazione? = dao.getById(id)
     suspend fun byProgressivo(num: String): Riparazione? = dao.getByProgressivo(num)
 
     suspend fun generaProgressivo(): String {
         val anno = Calendar.getInstance().get(Calendar.YEAR)
-        val n = dao.countByPrefix("$anno-") + 1
-        return "$anno-${"%04d".format(n)}"
+        val prefix = "$anno-"
+        val n = dao.countByPrefix(prefix) + 1
+        return "$prefix${"%04d".format(n)}"
     }
 
     suspend fun insert(r: Riparazione): Long = dao.insert(r)
@@ -23,18 +25,23 @@ class RiparazioneRepository(private val dao: RiparazioneDao) {
     suspend fun update(r: Riparazione) = dao.update(r)
 
     suspend fun delete(r: Riparazione) {
-        eliminaFoto(r.fotoPaths); dao.delete(r)
+        eliminaFoto(r.fotoPaths)
+        dao.delete(r)
     }
 
     suspend fun deleteMany(rips: List<Riparazione>) {
-        rips.forEach { eliminaFoto(it.fotoPaths) }; dao.deleteByIds(rips.map { it.id })
+        rips.forEach { eliminaFoto(it.fotoPaths) }
+        dao.deleteByIds(rips.map { it.id })
     }
 
-    suspend fun deleteAll(tutte: List<Riparazione>) {
-        tutte.forEach { eliminaFoto(it.fotoPaths) }; dao.deleteAll()
+    suspend fun deleteAll(tutteLeRiparazioni: List<Riparazione>) {
+        tutteLeRiparazioni.forEach { eliminaFoto(it.fotoPaths) }
+        dao.deleteAll()
     }
 
     private fun eliminaFoto(paths: List<String>) {
-        paths.forEach { try { File(it).takeIf { f -> f.exists() }?.delete() } catch (_: Exception) {} }
+        paths.forEach { p ->
+            try { val f = File(p); if (f.exists()) f.delete() } catch (_: Exception) {}
+        }
     }
 }

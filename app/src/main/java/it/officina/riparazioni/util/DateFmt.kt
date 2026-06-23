@@ -13,7 +13,7 @@ object DateFmt {
     fun full(t: Long): String     = full.format(Date(t))
     fun datetime(t: Long): String = datetime.format(Date(t))
 
-    /** Formatta millisecondi come "Xh Ym" oppure "Ym" oppure "< 1 min" */
+    /** Formatta millisecondi come "Xh Ymin" oppure "Ymin" oppure "< 1 min" */
     fun durata(ms: Long): String {
         if (ms <= 0) return "0 min"
         val totMin = ms / 60_000

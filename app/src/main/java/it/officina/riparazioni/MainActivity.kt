@@ -19,23 +19,38 @@ import it.officina.riparazioni.ui.screens.ListaScreen
 import it.officina.riparazioni.ui.theme.RiparazioniTheme
 
 class MainActivity : ComponentActivity() {
+
     private val viewModel: RiparazioneViewModel by viewModels {
         RiparazioneVMFactory((application as RiparazioniApp).repository)
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
+
         setContent {
             RiparazioniTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = "lista") {
                         composable("lista") {
-                            ListaScreen(vm = viewModel, onApri = { nav.navigate("dettaglio/$it") }, onNuova = { nav.navigate("dettaglio/0") })
+                            ListaScreen(
+                                vm = viewModel,
+                                onApri = { id -> nav.navigate("dettaglio/$id") },
+                                onNuova = { nav.navigate("dettaglio/0") }
+                            )
                         }
                         composable("dettaglio/{id}") { back ->
-                            val id = back.arguments?.getString("id")?.toLongOrNull() ?: 0L
-                            DettaglioScreen(vm = viewModel, riparazioneId = if (id == 0L) null else id, onIndietro = { nav.popBackStack() })
+                            val idStr = back.arguments?.getString("id")
+                            val id = idStr?.toLongOrNull() ?: 0L
+                            DettaglioScreen(
+                                vm = viewModel,
+                                riparazioneId = if (id == 0L) null else id,
+                                onIndietro = { nav.popBackStack() }
+                            )
                         }
                     }
                 }

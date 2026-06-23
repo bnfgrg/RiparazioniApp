@@ -1,11 +1,18 @@
 package it.officina.riparazioni.data
 
 import android.content.Context
-import androidx.room.*
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Riparazione::class], version = 3, exportSchema = false)
+@Database(
+    entities = [Riparazione::class],
+    version = 3,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -31,8 +38,12 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(ctx: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
-                    ctx.applicationContext, AppDatabase::class.java, "riparazioni.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { INSTANCE = it }
+                    ctx.applicationContext,
+                    AppDatabase::class.java,
+                    "riparazioni.db"
+                )
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .build().also { INSTANCE = it }
             }
         }
     }

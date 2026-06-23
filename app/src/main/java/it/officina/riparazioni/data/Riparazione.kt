@@ -45,8 +45,8 @@ data class Riparazione(
     val dataIngresso: Long = System.currentTimeMillis(),
     val dataPronto: Long? = null,
     val dataConsegna: Long? = null,
-    // Timer lavoro effettivo
-    val tempoLavoroMs: Long = 0L,          // millisecondi totali accumulati in IN_LAVORAZIONE
-    val timerAvviatoAl: Long? = null,      // timestamp inizio ultima sessione di lavoro (null = timer fermo)
+    // Timer lavoro effettivo (modifica 2)
+    val tempoLavoroMs: Long = 0L,       // millisecondi totali accumulati in IN_LAVORAZIONE
+    val timerAvviatoAl: Long? = null,   // timestamp avvio ultima sessione (null = timer fermo)
     val fotoPaths: List<String> = emptyList()
 )

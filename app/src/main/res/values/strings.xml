@@ -1,14 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Riparazioni</string>
+
+    <!-- Lista -->
     <string name="lista_titolo">Riparazioni</string>
+    <string name="cerca_placeholder">Cerca cliente o modello…</string>
+    <string name="filtro_tutti">Tutti</string>
+    <string name="filtro_attesa">In attesa</string>
+    <string name="filtro_lavorazione">In lavorazione</string>
+    <string name="filtro_pronti">Pronti</string>
+    <string name="filtro_consegnati">Consegnati</string>
     <string name="nuova_riparazione">Nuova riparazione</string>
     <string name="lista_vuota">Nessuna riparazione</string>
     <string name="lista_vuota_sub">Tocca + per aggiungerne una</string>
-    <string name="indietro">Indietro</string>
+
+    <!-- Stati -->
+    <string name="stato_in_attesa">In attesa</string>
+    <string name="stato_in_lavorazione">In lavorazione</string>
+    <string name="stato_pronto">Pronto</string>
+    <string name="stato_consegnato">Consegnato</string>
+
+    <!-- Dettaglio -->
+    <string name="dettaglio_titolo_nuova">Nuova riparazione</string>
+    <string name="scatta_foto">Tocca per scattare foto</string>
+    <string name="cliente">Cliente</string>
+    <string name="telefono">Telefono</string>
+    <string name="tipo_dispositivo">Tipo dispositivo</string>
+    <string name="tipo_motosega">Motosega</string>
+    <string name="tipo_decespugliatore">Decespugliatore</string>
+    <string name="tipo_soffiatore">Soffiatore</string>
+    <string name="tipo_altro">Altro</string>
+    <string name="marca_modello">Marca e modello</string>
+    <string name="problema">Problema riscontrato</string>
+    <string name="stato">Stato</string>
+    <string name="note_interne">Note interne</string>
+    <string name="data_ingresso">Data ingresso</string>
+    <string name="data_consegna">Data consegna</string>
     <string name="salva">Salva</string>
-    <string name="elimina">Elimina</string>
+    <string name="stampa_etichetta">Stampa etichetta</string>
+    <string name="elimina_riparazione">Elimina riparazione</string>
+
+    <!-- Cancellazione -->
+    <string name="conferma_elimina_titolo">Eliminare la riparazione?</string>
+    <string name="conferma_elimina_testo">Verranno rimossi definitivamente il record e le foto associate. Operazione non annullabile.</string>
+    <string name="conferma_elimina_multi_titolo">Eliminare %1$d riparazioni?</string>
+    <string name="conferma_elimina_multi_testo">Verranno rimossi definitivamente i record e tutte le foto associate. Operazione non annullabile.</string>
     <string name="annulla">Annulla</string>
-    <string name="n_selezionate">%1$d selezionate</string>
+    <string name="elimina">Elimina</string>
+    <string name="elimina_n">Elimina %1$d riparazioni</string>
     <string name="seleziona_tutto">Seleziona tutto</string>
+    <string name="n_selezionate">%1$d selezionate</string>
+
+    <!-- Permessi -->
+    <string name="permesso_camera_richiesto">Per scattare foto serve il permesso fotocamera</string>
+    <string name="concedi_permesso">Concedi permesso</string>
+
+    <!-- WhatsApp -->
+    <string name="notifica_whatsapp">Notifica su WhatsApp</string>
+    <string name="whatsapp_non_installato">WhatsApp non installato</string>
+
+    <!-- Generale -->
+    <string name="indietro">Indietro</string>
 </resources>
