@@ -160,7 +160,7 @@ fun ListaScreen(
                         Column {
                             Text(stringResource(R.string.lista_titolo))
                             Text(
-                                "v${BuildConfig.VERSION_NAME}  build ${BuildConfig.VERSION_CODE}",
+                                "v${BuildConfig.VERSION_NAME}  build ${BuildConfig.BUILD_TIME}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

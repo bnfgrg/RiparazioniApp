@@ -12,8 +12,12 @@ android {
         applicationId = "it.officina.riparazioni"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
+        // versionCode = timestamp Unix in minuti dal 2024-01-01, cresce ad ogni build
+        versionCode = ((System.currentTimeMillis() / 60000) - 28270080).toInt()
         versionName = "1.0"
+        // Data e ora della build, iniettata come BuildConfig.BUILD_TIME
+        val buildTime = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(java.util.Date())
+        buildConfigField("String", "BUILD_TIME", '"$buildTime"')
         vectorDrawables { useSupportLibrary = true }
     }
 

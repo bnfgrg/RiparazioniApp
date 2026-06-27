@@ -83,6 +83,7 @@ import it.officina.riparazioni.util.DateFmt
 import it.officina.riparazioni.util.PdfUtil
 import it.officina.riparazioni.util.SmsUtil
 import it.officina.riparazioni.util.PhotoUtil
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,27 +96,40 @@ fun DettaglioScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var rip by remember { mutableStateOf<Riparazione?>(null) }
-    var caricato by remember { mutableStateOf(false) }
+    // Stato editing dal ViewModel: sopravvive alla distruzione dell'Activity
+    val ripEditing by vm.ripInEditing.collectAsStateWithLifecycle()
     var mostraConfermaElimina by remember { mutableStateOf(false) }
     // MODIFICA 1: stato foto da ingrandire
     var fotoIngrandita by remember { mutableStateOf<String?>(null) }
 
+    // Carica la riparazione solo se il ViewModel non ha già uno stato in editing
+    // per questo stesso id (es. utente era già qui prima di andare in background)
     LaunchedEffect(riparazioneId) {
-        rip = if (riparazioneId == null || riparazioneId == 0L) {
-            Riparazione(numeroProgressivo = vm.nuovoProgressivo())
-        } else {
-            vm.byId(riparazioneId) ?: Riparazione(numeroProgressivo = vm.nuovoProgressivo())
+        val editing = vm.ripInEditing.value
+        val idCorrente = editing?.id ?: -99L
+        val idAtteso = riparazioneId ?: 0L
+        // Ricarica solo se l'editing corrente non è per questa scheda
+        val isSteady = if (riparazioneId == null || riparazioneId == 0L)
+            editing != null && editing.id == 0L
+        else editing != null && editing.id == riparazioneId
+        if (!isSteady) {
+            val r = if (riparazioneId == null || riparazioneId == 0L) {
+                Riparazione(numeroProgressivo = vm.nuovoProgressivo())
+            } else {
+                vm.byId(riparazioneId) ?: Riparazione(numeroProgressivo = vm.nuovoProgressivo())
+            }
+            vm.iniziaEditing(r)
         }
-        caricato = true
     }
 
-    if (!caricato || rip == null) {
+    if (ripEditing == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Caricamento…") }
         return
     }
 
-    val r = rip!!
+    val r = ripEditing!!
+    // Alias per aggiornare lo stato: ogni modifica va al ViewModel
+    fun aggiorna(nuovo: Riparazione) { vm.aggiornaEditing(nuovo) }
 
     var pendingPhotoPath by rememberSaveable { mutableStateOf<String?>(null) }
     var camPermGranted by remember { mutableStateOf(false) }
@@ -124,7 +138,7 @@ fun DettaglioScreen(
         camPermGranted = granted
     }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && pendingPhotoPath != null) rip = rip!!.copy(fotoPaths = rip!!.fotoPaths + pendingPhotoPath!!)
+        if (success && pendingPhotoPath != null) aggiorna(r.copy(fotoPaths = r.fotoPaths + pendingPhotoPath!!))
         pendingPhotoPath = null
     }
 
@@ -145,7 +159,7 @@ fun DettaglioScreen(
     LaunchedEffect(r.timerAvviatoAl, r.tempoLavoroMs) {
         if (r.timerAvviatoAl != null) {
             while (true) {
-                tempoCorrente = vm.tempoEffettivo(rip ?: r)
+                tempoCorrente = vm.tempoEffettivo(vm.ripInEditing.value ?: r)
                 kotlinx.coroutines.delay(30_000L)
             }
         } else {
@@ -174,7 +188,7 @@ fun DettaglioScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onIndietro) {
+                    IconButton(onClick = { vm.terminaEditing(); onIndietro() }) {
                         Icon(Icons.Default.ArrowBack, stringResource(R.string.indietro))
                     }
                 }
@@ -230,7 +244,7 @@ fun DettaglioScreen(
                             )
                             IconButton(
                                 onClick = {
-                                    rip = rip!!.copy(fotoPaths = rip!!.fotoPaths - path)
+                                    aggiorna(r.copy(fotoPaths = r.fotoPaths - path))
                                     try { java.io.File(path).delete() } catch (_: Exception) {}
                                 },
                                 modifier = Modifier
@@ -263,14 +277,14 @@ fun DettaglioScreen(
             Spacer(Modifier.height(16.dp))
 
             EtichettaCampo(stringResource(R.string.cliente))
-            OutlinedTextField(value = r.cliente, onValueChange = { rip = r.copy(cliente = it) },
+            OutlinedTextField(value = r.cliente, onValueChange = { aggiorna(r.copy(cliente = it)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(12.dp))
 
             EtichettaCampo(stringResource(R.string.telefono))
             OutlinedTextField(
-                value = r.telefono, onValueChange = { rip = r.copy(telefono = it) },
+                value = r.telefono, onValueChange = { aggiorna(r.copy(telefono = it)) },
                 singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -288,18 +302,18 @@ fun DettaglioScreen(
             Spacer(Modifier.height(16.dp))
 
             EtichettaCampo(stringResource(R.string.tipo_dispositivo))
-            TipoDispositivoDropdown(selected = r.tipoDispositivo, onSelect = { rip = r.copy(tipoDispositivo = it) })
+            TipoDispositivoDropdown(selected = r.tipoDispositivo, onSelect = { aggiorna(r.copy(tipoDispositivo = it)) })
 
             Spacer(Modifier.height(16.dp))
 
             EtichettaCampo(stringResource(R.string.marca_modello))
-            OutlinedTextField(value = r.marcaModello, onValueChange = { rip = r.copy(marcaModello = it) },
+            OutlinedTextField(value = r.marcaModello, onValueChange = { aggiorna(r.copy(marcaModello = it)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(12.dp))
 
             EtichettaCampo(stringResource(R.string.problema))
-            OutlinedTextField(value = r.problema, onValueChange = { rip = r.copy(problema = it) },
+            OutlinedTextField(value = r.problema, onValueChange = { aggiorna(r.copy(problema = it)) },
                 modifier = Modifier.fillMaxWidth().height(100.dp))
 
             Spacer(Modifier.height(16.dp))
@@ -308,16 +322,16 @@ fun DettaglioScreen(
             EtichettaCampo(stringResource(R.string.stato))
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChipColorato("In attesa", ColorAttesa, r.stato == StatoRiparazione.IN_ATTESA) {
-                    rip = vm.applicaCambioStato(r, StatoRiparazione.IN_ATTESA)
+                    aggiorna(vm.applicaCambioStato(r, StatoRiparazione.IN_ATTESA))
                 }
                 ChipColorato("In lavorazione", ColorLavorazione, r.stato == StatoRiparazione.IN_LAVORAZIONE) {
-                    rip = vm.applicaCambioStato(r, StatoRiparazione.IN_LAVORAZIONE)
+                    aggiorna(vm.applicaCambioStato(r, StatoRiparazione.IN_LAVORAZIONE))
                 }
                 ChipColorato("Pronto", ColorPronto, r.stato == StatoRiparazione.PRONTO) {
-                    rip = vm.applicaCambioStato(r, StatoRiparazione.PRONTO)
+                    aggiorna(vm.applicaCambioStato(r, StatoRiparazione.PRONTO))
                 }
                 ChipColorato("Consegnato", ColorConsegnato, r.stato == StatoRiparazione.CONSEGNATO) {
-                    rip = vm.applicaCambioStato(r, StatoRiparazione.CONSEGNATO)
+                    aggiorna(vm.applicaCambioStato(r, StatoRiparazione.CONSEGNATO))
                 }
             }
 
@@ -345,13 +359,13 @@ fun DettaglioScreen(
             Spacer(Modifier.height(12.dp))
 
             EtichettaCampo(stringResource(R.string.note_interne))
-            OutlinedTextField(value = r.noteInterne, onValueChange = { rip = r.copy(noteInterne = it) },
+            OutlinedTextField(value = r.noteInterne, onValueChange = { aggiorna(r.copy(noteInterne = it)) },
                 modifier = Modifier.fillMaxWidth().height(80.dp))
 
             Spacer(Modifier.height(12.dp))
 
             EtichettaCampo("Prezzo riparazione (€)")
-            OutlinedTextField(value = r.prezzoRiparazione, onValueChange = { rip = r.copy(prezzoRiparazione = it) },
+            OutlinedTextField(value = r.prezzoRiparazione, onValueChange = { aggiorna(r.copy(prezzoRiparazione = it)) },
                 singleLine = true, placeholder = { Text("es. 45,00") }, modifier = Modifier.fillMaxWidth())
 
             Spacer(Modifier.height(16.dp))
@@ -375,7 +389,7 @@ fun DettaglioScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            Button(onClick = { vm.salva(r) { onIndietro() } }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { vm.salva(r) { vm.terminaEditing(); onIndietro() } }, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.salva))
             }
 
@@ -432,7 +446,7 @@ fun DettaglioScreen(
             testo = stringResource(R.string.conferma_elimina_testo),
             sottoinfo = "${r.cliente}\n${r.tipoDispositivo.label} — ${r.marcaModello}\n#${r.numeroProgressivo}",
             confermaLabel = stringResource(R.string.elimina),
-            onConferma = { vm.elimina(r); mostraConfermaElimina = false; onIndietro() },
+            onConferma = { vm.elimina(r); vm.terminaEditing(); mostraConfermaElimina = false; onIndietro() },
             onAnnulla = { mostraConfermaElimina = false }
         )
     }

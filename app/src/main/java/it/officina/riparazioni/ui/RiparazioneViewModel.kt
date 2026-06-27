@@ -29,6 +29,17 @@ class RiparazioneViewModel(
     private val repo: RiparazioneRepository
 ) : ViewModel() {
 
+    // ─── STATO EDITING (sopravvive alla distruzione dell'Activity) ─────────────
+    // Mantiene la riparazione in fase di modifica/creazione.
+    // MutableStateFlow nel ViewModel non viene azzerato da Android quando
+    // l'app va in background o lo schermo si spegne.
+    private val _ripInEditing = MutableStateFlow<Riparazione?>(null)
+    val ripInEditing: StateFlow<Riparazione?> = _ripInEditing
+
+    fun iniziaEditing(r: Riparazione) { _ripInEditing.value = r }
+    fun aggiornaEditing(r: Riparazione) { _ripInEditing.value = r }
+    fun terminaEditing() { _ripInEditing.value = null }
+
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
 
