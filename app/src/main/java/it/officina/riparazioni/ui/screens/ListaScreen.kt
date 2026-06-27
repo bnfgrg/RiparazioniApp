@@ -72,6 +72,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import it.officina.riparazioni.BuildConfig
+import java.text.SimpleDateFormat
+import java.util.Date
 import it.officina.riparazioni.R
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.ui.FiltroStato
@@ -160,7 +162,12 @@ fun ListaScreen(
                         Column {
                             Text(stringResource(R.string.lista_titolo))
                             Text(
-                                "v${BuildConfig.VERSION_NAME}  build ${BuildConfig.BUILD_TIME}",
+                                run {
+                                    // versionCode = minuti dall'1/1/2024; riconvertiamo in data
+                                    val ms = (BuildConfig.VERSION_CODE.toLong() + 28270080L) * 60000L
+                                    val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.ITALIAN)
+                                    "v${BuildConfig.VERSION_NAME}  build ${fmt.format(Date(ms))}"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
