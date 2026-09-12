@@ -44,6 +44,9 @@ interface RiparazioneDao {
     @Query("SELECT DISTINCT cliente FROM riparazioni ORDER BY cliente")
     fun getClientiDistinti(): Flow<List<String>>
 
+    @Query("SELECT * FROM riparazioni WHERE clienteId = :id ORDER BY dataIngresso DESC")
+    fun getByClienteId(id: Long): Flow<List<Riparazione>>
+
     @Query("DELETE FROM riparazioni")
     suspend fun deleteAll()
 }

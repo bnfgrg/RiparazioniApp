@@ -34,8 +34,9 @@ enum class TipoDispositivo(val label: String) {
 data class Riparazione(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val numeroProgressivo: String = "",
-    val cliente: String = "",
-    val telefono: String = "",
+    val clienteId: Long? = null,        // FK verso tabella clienti (nullable per retrocompat)
+    val cliente: String = "",           // mantenuto per retrocompatibilità e ricerca testo
+    val telefono: String = "",          // mantenuto per retrocompatibilità
     val tipoDispositivo: TipoDispositivo = TipoDispositivo.MOTOSEGA,
     val marcaModello: String = "",
     val problema: String = "",
@@ -45,8 +46,7 @@ data class Riparazione(
     val dataIngresso: Long = System.currentTimeMillis(),
     val dataPronto: Long? = null,
     val dataConsegna: Long? = null,
-    // Timer lavoro effettivo (modifica 2)
-    val tempoLavoroMs: Long = 0L,       // millisecondi totali accumulati in IN_LAVORAZIONE
-    val timerAvviatoAl: Long? = null,   // timestamp avvio ultima sessione (null = timer fermo)
+    val tempoLavoroMs: Long = 0L,
+    val timerAvviatoAl: Long? = null,
     val fotoPaths: List<String> = emptyList()
 )

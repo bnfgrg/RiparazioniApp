@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -98,7 +99,8 @@ private enum class ModalitaImport { TOTALE, AGGIUNTIVA_SOVRASCRIVI, AGGIUNTIVA_I
 fun ListaScreen(
     vm: RiparazioneViewModel,
     onApri: (Long) -> Unit,
-    onNuova: () -> Unit
+    onNuova: () -> Unit,
+    onApriAnagrafica: () -> Unit = {}
 ) {
     val items  by vm.filtrate.collectAsStateWithLifecycle()
     val query  by vm.query.collectAsStateWithLifecycle()
@@ -163,7 +165,6 @@ fun ListaScreen(
                             Text(stringResource(R.string.lista_titolo))
                             Text(
                                 run {
-                                    // versionCode = minuti dall'1/1/2024; riconvertiamo in data
                                     val ms = (BuildConfig.VERSION_CODE.toLong() + 28270080L) * 60000L
                                     val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.ITALIAN)
                                     "v${BuildConfig.VERSION_NAME}  build ${fmt.format(Date(ms))}"
@@ -176,6 +177,11 @@ fun ListaScreen(
                     actions = {
                         IconButton(onClick = { mostraMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                         DropdownMenu(expanded = mostraMenu, onDismissRequest = { mostraMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Anagrafica clienti") },
+                                leadingIcon = { Icon(Icons.Default.People, null) },
+                                onClick = { mostraMenu = false; onApriAnagrafica() }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Esporta schede (CSV)") },
                                 leadingIcon = { Icon(Icons.Default.FileDownload, null) },
@@ -514,7 +520,7 @@ private fun CardRiparazione(
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(r.cliente.ifEmpty { "Senza nome" }, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyLarge)
-                Text(r.marcaModello.ifEmpty { r.tipoDispositivo.label }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(r.marcaModello.ifEmpty { r.tipoDispositivo.label }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                 // MODIFICA 2: mostra tempo lavoro nella card
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("#${r.numeroProgressivo} · ${DateFmt.short(r.dataIngresso)}",
