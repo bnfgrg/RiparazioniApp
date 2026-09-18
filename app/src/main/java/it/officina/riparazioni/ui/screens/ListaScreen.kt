@@ -527,16 +527,21 @@ private fun CardRiparazione(
             }
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(r.cliente.ifEmpty { "Senza nome" }, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyLarge)
-                Text(r.marcaModello.ifEmpty { r.tipoDispositivo.label }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                // MODIFICA 2: mostra tempo lavoro nella card
+                // Font +20% rispetto ai valori base del tema
+                Text(r.cliente.ifEmpty { "Senza nome" },
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 19.sp)
+                Text(r.marcaModello.ifEmpty { r.tipoDispositivo.label },
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurface)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("#${r.numeroProgressivo} · ${DateFmt.short(r.dataIngresso)}",
-                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (r.tempoLavoroMs > 0 || r.timerAvviatoAl != null) {
                         val extra = if (r.timerAvviatoAl != null) System.currentTimeMillis() - r.timerAvviatoAl else 0L
                         Text("⏱ ${DateFmt.durata(r.tempoLavoroMs + extra)}",
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

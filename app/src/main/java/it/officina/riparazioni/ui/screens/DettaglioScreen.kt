@@ -167,12 +167,34 @@ fun DettaglioScreen(
             } else {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(r.fotoPaths) { path ->
-                        Box(modifier = Modifier.size(160.dp, 120.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                            AsyncImage(model = path, contentDescription = null, contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clickable { fotoIngrandita = path })
-                            IconButton(onClick = { aggiorna(r.copy(fotoPaths = r.fotoPaths - path)); try { java.io.File(path).delete() } catch (_: Exception) {} },
-                                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(28.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f))) {
-                                Icon(Icons.Default.Close, "Rimuovi", tint = Color.White, modifier = Modifier.size(16.dp))
+                        Box(modifier = Modifier
+                            .size(160.dp, 120.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            // Immagine: tap per ingrandire
+                            AsyncImage(
+                                model = path,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clickable { fotoIngrandita = path }
+                            )
+                            // Pulsante rimozione in alto a destra, sempre visibile sopra la foto
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(6.dp)
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xCC000000))
+                                    .clickable {
+                                        aggiorna(r.copy(fotoPaths = r.fotoPaths - path))
+                                        try { java.io.File(path).delete() } catch (_: Exception) {}
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Close, "Rimuovi foto",
+                                    tint = Color.White, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
