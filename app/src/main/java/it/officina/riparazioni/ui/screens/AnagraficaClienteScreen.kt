@@ -134,7 +134,8 @@ fun AnagraficaDettaglioScreen(
     vm: RiparazioneViewModel,
     clienteId: Long?,   // null = nuovo
     onIndietro: () -> Unit,
-    onApriRiparazione: (Long) -> Unit
+    onApriRiparazione: (Long) -> Unit,
+    fromRiparazione: Boolean = false  // true = aperto dal flusso nuova riparazione
 ) {
     var cliente by remember { mutableStateOf<Cliente?>(null) }
     var caricato by remember { mutableStateOf(false) }
@@ -205,7 +206,15 @@ fun AnagraficaDettaglioScreen(
 
             // ─── SALVA ────────────────────────────────────────────────────────
             Button(
-                onClick = { vm.salvaCliente(c) { onIndietro() } },
+                onClick = {
+                    val isNuovo = clienteId == null || clienteId == 0L
+                    vm.salvaCliente(c) { idSalvato ->
+                        if (isNuovo && fromRiparazione) {
+                            vm.segnalaClienteCreato(idSalvato)
+                        }
+                        onIndietro()
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Salva") }
 

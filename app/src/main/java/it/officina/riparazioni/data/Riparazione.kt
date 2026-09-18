@@ -10,6 +10,12 @@ enum class StatoRiparazione(val label: String) {
     CONSEGNATO("Consegnato")
 }
 
+enum class StatoChiamata(val label: String) {
+    NON_CHIAMATO("Cliente non ancora chiamato"),
+    CHIAMATO("Cliente chiamato"),
+    CHIAMATO_SENZA_RISPOSTA("Cliente chiamato senza risposta")
+}
+
 enum class TipoDispositivo(val label: String) {
     MOTOSEGA("Motosega"),
     DECESPUGLIATORE("Decespugliatore"),
@@ -48,5 +54,6 @@ data class Riparazione(
     val dataConsegna: Long? = null,
     val tempoLavoroMs: Long = 0L,
     val timerAvviatoAl: Long? = null,
+    val statoChiamata: StatoChiamata = StatoChiamata.NON_CHIAMATO,
     val fotoPaths: List<String> = emptyList()
 )

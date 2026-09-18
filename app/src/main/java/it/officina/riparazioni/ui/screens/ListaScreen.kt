@@ -121,6 +121,7 @@ fun ListaScreen(
 
     // Import CSV
     var csvRighe               by remember { mutableStateOf<List<Riparazione>?>(null) }
+    var csvImportData          by remember { mutableStateOf<ExportUtil.ImportData?>(null) }
     var mostraDialogImportScelta by remember { mutableStateOf(false) }
     var mostraDialogImportConferma by remember { mutableStateOf(false) }
     var importModalita         by remember { mutableStateOf(ModalitaImport.TOTALE) }
@@ -130,7 +131,9 @@ fun ListaScreen(
     val csvPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            csvRighe = ExportUtil.leggiCsv(ctx, uri)
+            val importData = ExportUtil.leggi(ctx, uri)
+            csvRighe = importData.riparazioni
+            csvImportData = importData
             mostraDialogImportScelta = true
         } catch (e: Exception) {
             importError = "Errore lettura file: ${e.message}"
@@ -183,18 +186,21 @@ fun ListaScreen(
                                 onClick = { mostraMenu = false; onApriAnagrafica() }
                             )
                             DropdownMenuItem(
-                                text = { Text("Esporta schede (CSV)") },
+                                text = { Text("Esporta backup (ZIP)") },
                                 leadingIcon = { Icon(Icons.Default.FileDownload, null) },
                                 onClick = {
                                     mostraMenu = false
-                                    scope.launch { val f = ExportUtil.esportaCsv(ctx, tutte); ExportUtil.condividiCsv(ctx, f) }
+                                    scope.launch {
+                                        val f = ExportUtil.esportaZip(ctx, tutte, vm.clienti.value)
+                                        ExportUtil.condividi(ctx, f)
+                                    }
                                 }
                             )
                             // MODIFICA 4: import CSV
                             DropdownMenuItem(
                                 text = { Text("Importa da CSV") },
                                 leadingIcon = { Icon(Icons.Default.FileUpload, null) },
-                                onClick = { mostraMenu = false; csvPickerLauncher.launch("text/*") }
+                                onClick = { mostraMenu = false; csvPickerLauncher.launch("*/*") }
                             )
                             DropdownMenuItem(
                                 text = { Text("Cancella tutte le schede") },
@@ -411,12 +417,13 @@ fun ListaScreen(
                     } else {
                         scope.launch {
                             val righe = csvRighe ?: return@launch
-                            val (tot, nuovi, altri) = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
-                                vm.importaAggiuntivaSovrascrivi(righe) else vm.importaAggiuntivaIgnora(righe)
+                            val data = csvImportData ?: ExportUtil.ImportData(righe, emptyList())
+                                val (tot, nuovi, altri) = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
+                                vm.importaAggiuntivaSovrascrivi(data) else vm.importaAggiuntivaIgnora(data)
                             val etichetta = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
                                 "$nuovi nuove, $altri aggiornate" else "$nuovi nuove, $altri saltate"
                             importResult = "Importati $tot: $etichetta"
-                            csvRighe = null
+                            csvRighe = null; csvImportData = null
                         }
                     }
                 }) { Text("Avanti") }
@@ -437,9 +444,10 @@ fun ListaScreen(
                         mostraDialogImportConferma = false
                         scope.launch {
                             val righe = csvRighe ?: return@launch
-                            val (tot, nuovi, _) = vm.importaTotale(righe)
+                            val data = csvImportData ?: ExportUtil.ImportData(righe, emptyList())
+                            val (tot, nuovi, _) = vm.importaTotale(data)
                             importResult = "Importazione totale: $nuovi schede importate su $tot"
-                            csvRighe = null
+                            csvRighe = null; csvImportData = null
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)

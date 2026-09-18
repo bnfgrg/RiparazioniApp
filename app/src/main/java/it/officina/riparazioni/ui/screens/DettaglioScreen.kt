@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import it.officina.riparazioni.R
 import it.officina.riparazioni.data.Cliente
 import it.officina.riparazioni.data.Riparazione
+import it.officina.riparazioni.data.StatoChiamata
 import it.officina.riparazioni.data.StatoRiparazione
 import it.officina.riparazioni.data.TipoDispositivo
 import it.officina.riparazioni.ui.RiparazioneViewModel
@@ -88,6 +89,24 @@ fun DettaglioScreen(
     val clienti by vm.clienti.collectAsStateWithLifecycle()
     val clienteCollegato = remember(r.clienteId, clienti) {
         if (r.clienteId != null) clienti.find { it.id == r.clienteId } else null
+    }
+
+    // Ascolta il canale: se viene creato un nuovo cliente dal flusso nuova riparazione,
+    // aggiorna automaticamente il cliente selezionato nella scheda corrente
+    LaunchedEffect(Unit) {
+        vm.clienteAppenaCreato.collect { idCliente ->
+            val nuovoCliente = vm.clienteById(idCliente)
+            if (nuovoCliente != null && vm.ripInEditing.value != null) {
+                vm.aggiornaEditing(
+                    vm.ripInEditing.value!!.copy(
+                        clienteId = nuovoCliente.id,
+                        cliente = nuovoCliente.nomeCompleto,
+                        telefono = nuovoCliente.telefono
+                    )
+                )
+                vm.resetClienteCreato()
+            }
+        }
     }
 
     // Camera
@@ -259,6 +278,30 @@ fun DettaglioScreen(
             EtichettaCampo("Note interne")
             OutlinedTextField(value = r.noteInterne, onValueChange = { aggiorna(r.copy(noteInterne = it)) },
                 modifier = Modifier.fillMaxWidth().height(80.dp))
+
+            Spacer(Modifier.height(16.dp))
+
+            // ─── STATO CHIAMATA ───────────────────────────────────────────────
+            EtichettaCampo("Stato chiamata cliente")
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatoChiamata.values().forEach { sc ->
+                    val (color, bg) = when (sc) {
+                        StatoChiamata.NON_CHIAMATO        -> Pair(MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
+                        StatoChiamata.CHIAMATO            -> Pair(ColorPronto, ColorPronto.copy(alpha = 0.15f))
+                        StatoChiamata.CHIAMATO_SENZA_RISPOSTA -> Pair(ColorAttesa, ColorAttesa.copy(alpha = 0.15f))
+                    }
+                    val isSelected = r.statoChiamata == sc
+                    Box(modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isSelected) bg else MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { aggiorna(r.copy(statoChiamata = sc)) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Text(sc.label, style = MaterialTheme.typography.bodySmall,
+                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                            color = if (isSelected) color else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
 
             Spacer(Modifier.height(12.dp))
             EtichettaCampo("Prezzo riparazione (€)")

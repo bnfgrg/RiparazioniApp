@@ -16,6 +16,18 @@ enum class FiltroStato {
 
 class RiparazioneViewModel(private val repo: RiparazioneRepository) : ViewModel() {
 
+    // ─── CANALE: cliente appena creato da associare alla riparazione ────────────
+    // Emette l'id del cliente quando viene creato da dentro il flusso nuova riparazione
+    private val _clienteAppenaCreato = kotlinx.coroutines.flow.MutableSharedFlow<Long>(replay = 1)
+    val clienteAppenaCreato: kotlinx.coroutines.flow.SharedFlow<Long> = _clienteAppenaCreato
+
+    fun segnalaClienteCreato(id: Long) {
+        viewModelScope.launch { _clienteAppenaCreato.emit(id) }
+    }
+    fun resetClienteCreato() {
+        _clienteAppenaCreato.resetReplayCache()
+    }
+
     // ─── STATO EDITING (sopravvive alla distruzione Activity) ───────────────────
     private val _ripInEditing = MutableStateFlow<Riparazione?>(null)
     val ripInEditing: StateFlow<Riparazione?> = _ripInEditing
@@ -119,27 +131,69 @@ class RiparazioneViewModel(private val repo: RiparazioneRepository) : ViewModel(
     fun eliminaTutte(onDone: () -> Unit = {}) { viewModelScope.launch { repo.deleteAll(tutte.value); onDone() } }
     fun eliminaFiltrate(onDone: () -> Unit = {}) { viewModelScope.launch { repo.deleteMany(filtrate.value); onDone() } }
 
-    suspend fun importaTotale(righe: List<Riparazione>): Triple<Int, Int, Int> {
-        repo.deleteAll(tutte.value); var ins = 0
-        righe.forEach { repo.insert(it.copy(id = 0)); ins++ }
-        return Triple(righe.size, ins, 0)
+    /**
+     * Import totale: cancella tutto e reimporta clienti + riparazioni.
+     * Ricostruisce il mapping oldId -> newId per i clienti, poi aggiorna i clienteId delle riparazioni.
+     */
+    suspend fun importaTotale(data: it.officina.riparazioni.util.ExportUtil.ImportData): Triple<Int, Int, Int> {
+        repo.deleteAll(tutte.value)
+        // Prima importa clienti e costruisce la mappa vecchio-id -> nuovo-id
+        val idMap = mutableMapOf<Long, Long>()
+        data.clienti.forEach { c ->
+            val oldId = c.id
+            val newId = repo.insertCliente(c.copy(id = 0))
+            if (oldId > 0) idMap[oldId] = newId
+        }
+        // Poi importa riparazioni aggiornando il clienteId
+        var ins = 0
+        data.riparazioni.forEach { r ->
+            val nuovoClienteId = r.clienteId?.let { idMap[it] }
+            repo.insert(r.copy(id = 0, clienteId = nuovoClienteId)); ins++
+        }
+        return Triple(data.riparazioni.size, ins, 0)
     }
-    suspend fun importaAggiuntivaSovrascrivi(righe: List<Riparazione>): Triple<Int, Int, Int> {
+
+    suspend fun importaAggiuntivaSovrascrivi(data: it.officina.riparazioni.util.ExportUtil.ImportData): Triple<Int, Int, Int> {
+        // Importa clienti nuovi (non sovrascrive esistenti per telefono)
+        val idMap = mutableMapOf<Long, Long>()
+        data.clienti.forEach { c ->
+            val oldId = c.id
+            val newId = repo.insertCliente(c.copy(id = 0))
+            if (oldId > 0) idMap[oldId] = newId
+        }
         var nuovi = 0; var agg = 0
-        righe.forEach { r ->
+        data.riparazioni.forEach { r ->
+            val nuovoClienteId = r.clienteId?.let { idMap[it] } ?: r.clienteId
             val e = repo.byProgressivo(r.numeroProgressivo)
-            if (e != null) { repo.update(r.copy(id = e.id)); agg++ } else { repo.insert(r.copy(id = 0)); nuovi++ }
+            if (e != null) { repo.update(r.copy(id = e.id, clienteId = nuovoClienteId)); agg++ }
+            else { repo.insert(r.copy(id = 0, clienteId = nuovoClienteId)); nuovi++ }
         }
-        return Triple(righe.size, nuovi, agg)
+        return Triple(data.riparazioni.size, nuovi, agg)
     }
-    suspend fun importaAggiuntivaIgnora(righe: List<Riparazione>): Triple<Int, Int, Int> {
+
+    suspend fun importaAggiuntivaIgnora(data: it.officina.riparazioni.util.ExportUtil.ImportData): Triple<Int, Int, Int> {
+        val idMap = mutableMapOf<Long, Long>()
+        data.clienti.forEach { c ->
+            val oldId = c.id
+            val newId = repo.insertCliente(c.copy(id = 0))
+            if (oldId > 0) idMap[oldId] = newId
+        }
         var nuovi = 0; var salt = 0
-        righe.forEach { r ->
+        data.riparazioni.forEach { r ->
+            val nuovoClienteId = r.clienteId?.let { idMap[it] } ?: r.clienteId
             if (repo.byProgressivo(r.numeroProgressivo) != null) salt++
-            else { repo.insert(r.copy(id = 0)); nuovi++ }
+            else { repo.insert(r.copy(id = 0, clienteId = nuovoClienteId)); nuovi++ }
         }
-        return Triple(righe.size, nuovi, salt)
+        return Triple(data.riparazioni.size, nuovi, salt)
     }
+
+    // Versioni retrocompat con solo lista riparazioni
+    suspend fun importaTotale(righe: List<it.officina.riparazioni.data.Riparazione>): Triple<Int, Int, Int> =
+        importaTotale(it.officina.riparazioni.util.ExportUtil.ImportData(righe, emptyList()))
+    suspend fun importaAggiuntivaSovrascrivi(righe: List<it.officina.riparazioni.data.Riparazione>): Triple<Int, Int, Int> =
+        importaAggiuntivaSovrascrivi(it.officina.riparazioni.util.ExportUtil.ImportData(righe, emptyList()))
+    suspend fun importaAggiuntivaIgnora(righe: List<it.officina.riparazioni.data.Riparazione>): Triple<Int, Int, Int> =
+        importaAggiuntivaIgnora(it.officina.riparazioni.util.ExportUtil.ImportData(righe, emptyList()))
 }
 
 class RiparazioneVMFactory(private val repo: RiparazioneRepository) : ViewModelProvider.Factory {

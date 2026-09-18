@@ -49,8 +49,8 @@ class MainActivity : ComponentActivity() {
                                 riparazioneId = if (id == 0L) null else id,
                                 onIndietro = { nav.popBackStack() },
                                 onNuovoCliente = {
-                                    // Vai a nuovo cliente e torna
-                                    nav.navigate("anagrafica/cliente/0")
+                                    // Vai a nuovo cliente nel flusso riparazione
+                                    nav.navigate("riparazione/nuovo-cliente")
                                 }
                             )
                         }
@@ -65,14 +65,26 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Dettaglio/nuovo cliente
+                        // Dettaglio/nuovo cliente (da anagrafica)
                         composable("anagrafica/cliente/{id}") { back ->
                             val id = back.arguments?.getString("id")?.toLongOrNull() ?: 0L
                             AnagraficaDettaglioScreen(
                                 vm = viewModel,
                                 clienteId = if (id == 0L) null else id,
                                 onIndietro = { nav.popBackStack() },
-                                onApriRiparazione = { nav.navigate("dettaglio/$it") }
+                                onApriRiparazione = { nav.navigate("dettaglio/$it") },
+                                fromRiparazione = false
+                            )
+                        }
+
+                        // Nuovo cliente aperto dal flusso nuova riparazione
+                        composable("riparazione/nuovo-cliente") {
+                            AnagraficaDettaglioScreen(
+                                vm = viewModel,
+                                clienteId = null,
+                                onIndietro = { nav.popBackStack() },
+                                onApriRiparazione = { nav.navigate("dettaglio/$it") },
+                                fromRiparazione = true
                             )
                         }
                     }
