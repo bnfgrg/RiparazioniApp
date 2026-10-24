@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -99,7 +100,8 @@ private enum class ModalitaImport { TOTALE, AGGIUNTIVA_SOVRASCRIVI, AGGIUNTIVA_I
 fun ListaScreen(
     vm: RiparazioneViewModel,
     onApri: (Long) -> Unit,
-    onNuova: () -> Unit
+    onNuova: () -> Unit,
+    onRubrica: () -> Unit = {}
 ) {
     val items  by vm.filtrate.collectAsStateWithLifecycle()
     val query  by vm.query.collectAsStateWithLifecycle()
@@ -185,6 +187,11 @@ fun ListaScreen(
                         }
                         IconButton(onClick = { mostraMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                         DropdownMenu(expanded = mostraMenu, onDismissRequest = { mostraMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Rubrica clienti") },
+                                leadingIcon = { Icon(Icons.Default.People, null) },
+                                onClick = { mostraMenu = false; onRubrica() }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Esporta backup (ZIP)") },
                                 leadingIcon = { Icon(Icons.Default.FileDownload, null) },
@@ -469,12 +476,14 @@ fun ListaScreen(
                         mostraDialogImportConferma = true
                     } else {
                         scope.launch {
-                            val righe = importData?.riparazioni ?: return@launch
+                            val data = importData ?: return@launch
                             val (tot, nuovi, altri) = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
-                                vm.importaAggiuntivaSovrascrivi(righe) else vm.importaAggiuntivaIgnora(righe)
+                                vm.importaAggiuntivaSovrascrivi(data.riparazioni) else vm.importaAggiuntivaIgnora(data.riparazioni)
                             val etichetta = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
                                 "$nuovi nuove, $altri aggiornate" else "$nuovi nuove, $altri saltate"
-                            importResult = "Importati $tot: $etichetta"
+                            if (data.clienti.isNotEmpty()) vm.importaClientiExtra(data.clienti)
+                            importResult = "Importati $tot: $etichetta" +
+                                if (data.clienti.isNotEmpty()) "\n${data.clienti.size} clienti in rubrica." else ""
                             importData = null
                         }
                     }
@@ -494,9 +503,11 @@ fun ListaScreen(
                     onClick = {
                         mostraDialogImportConferma = false
                         scope.launch {
-                            val righe = importData?.riparazioni ?: return@launch
-                            val (tot, nuovi, _) = vm.importaTotale(righe)
-                            importResult = "Importazione totale: $nuovi schede importate su $tot"
+                            val data = importData ?: return@launch
+                            val (tot, nuovi, _) = vm.importaTotale(data.riparazioni)
+                            if (data.clienti.isNotEmpty()) vm.importaClientiExtra(data.clienti)
+                            importResult = "Importazione totale: $nuovi schede importate su $tot" +
+                                if (data.clienti.isNotEmpty()) "\n${data.clienti.size} clienti in rubrica." else ""
                             importData = null
                         }
                     },

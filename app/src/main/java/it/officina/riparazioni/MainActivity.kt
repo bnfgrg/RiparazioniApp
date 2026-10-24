@@ -41,7 +41,8 @@ class MainActivity : ComponentActivity() {
                             ListaScreen(
                                 vm = viewModel,
                                 onApri = { id -> nav.navigate("dettaglio/$id") },
-                                onNuova = { nav.navigate("dettaglio/0") }
+                                onNuova = { nav.navigate("dettaglio/0") },
+                                onRubrica = { nav.navigate("anagrafica-cliente?fromRiparazione=false") }
                             )
                         }
                         composable("dettaglio/{id}") { back ->

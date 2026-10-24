@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.data.RiparazioneRepository
 import it.officina.riparazioni.data.StatoRiparazione
+import it.officina.riparazioni.util.ExportUtil
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,7 +32,7 @@ class RiparazioneViewModel(
     private val repo: RiparazioneRepository
 ) : ViewModel() {
 
-    // SharedFlow per comunicare il clienteId appena creato alla schermata riparazione
+    // SharedFlow per comunicare il cliente appena creato/selezionato alla schermata riparazione
     private val _clienteAppenaCreato = MutableSharedFlow<String>(replay = 1)
     val clienteAppenaCreato: SharedFlow<String> = _clienteAppenaCreato
 
@@ -43,6 +44,44 @@ class RiparazioneViewModel(
 
     fun resetClienteCreato() {
         _clienteAppenaCreato.resetReplayCache()
+    }
+
+    // ─── RUBRICA CLIENTI STANDALONE ─────────────────────────────────────────────
+    // Clienti "puri" (non ancora associati a nessuna riparazione) salvati in memoria.
+    // Vengono uniti ai clienti derivati dalle riparazioni nell'AnagraficaClienteScreen.
+
+    private val _clientiExtra = MutableStateFlow<List<ExportUtil.ClienteInfo>>(emptyList())
+    val clientiExtra: StateFlow<List<ExportUtil.ClienteInfo>> = _clientiExtra
+
+    fun aggiungiClienteExtra(nome: String, telefono: String) {
+        val nomeTrimmed = nome.trim()
+        if (nomeTrimmed.isBlank()) return
+        val lista = _clientiExtra.value.toMutableList()
+        val idx = lista.indexOfFirst { it.nome.equals(nomeTrimmed, ignoreCase = true) }
+        if (idx >= 0) lista[idx] = ExportUtil.ClienteInfo(nomeTrimmed, telefono.trim())
+        else lista.add(ExportUtil.ClienteInfo(nomeTrimmed, telefono.trim()))
+        _clientiExtra.value = lista.sortedBy { it.nome }
+    }
+
+    fun aggiornaClienteExtra(vecchioNome: String, nuovoNome: String, nuovoTelefono: String) {
+        val lista = _clientiExtra.value.toMutableList()
+        val idx = lista.indexOfFirst { it.nome == vecchioNome }
+        if (idx >= 0) lista[idx] = ExportUtil.ClienteInfo(nuovoNome.trim(), nuovoTelefono.trim())
+        _clientiExtra.value = lista.sortedBy { it.nome }
+    }
+
+    fun rimuoviClienteExtra(nome: String) {
+        _clientiExtra.value = _clientiExtra.value.filter { it.nome != nome }
+    }
+
+    /** Carica clienti extra da un import ZIP (clienti.csv). */
+    fun importaClientiExtra(clienti: List<ExportUtil.ClienteInfo>) {
+        val existing = _clientiExtra.value.toMutableList()
+        clienti.forEach { c ->
+            if (c.nome.isNotBlank() && existing.none { it.nome.equals(c.nome, ignoreCase = true) })
+                existing.add(c)
+        }
+        _clientiExtra.value = existing.sortedBy { it.nome }
     }
 
     private val _query = MutableStateFlow("")
