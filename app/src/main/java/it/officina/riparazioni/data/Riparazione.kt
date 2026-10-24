@@ -10,12 +10,6 @@ enum class StatoRiparazione(val label: String) {
     CONSEGNATO("Consegnato")
 }
 
-enum class StatoChiamata(val label: String) {
-    NON_CHIAMATO("Cliente non ancora chiamato"),
-    CHIAMATO("Cliente chiamato"),
-    CHIAMATO_SENZA_RISPOSTA("Cliente chiamato senza risposta")
-}
-
 enum class TipoDispositivo(val label: String) {
     MOTOSEGA("Motosega"),
     DECESPUGLIATORE("Decespugliatore"),
@@ -40,9 +34,8 @@ enum class TipoDispositivo(val label: String) {
 data class Riparazione(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val numeroProgressivo: String = "",
-    val clienteId: Long? = null,        // FK verso tabella clienti (nullable per retrocompat)
-    val cliente: String = "",           // mantenuto per retrocompatibilità e ricerca testo
-    val telefono: String = "",          // mantenuto per retrocompatibilità
+    val cliente: String = "",
+    val telefono: String = "",
     val tipoDispositivo: TipoDispositivo = TipoDispositivo.MOTOSEGA,
     val marcaModello: String = "",
     val problema: String = "",
@@ -52,8 +45,15 @@ data class Riparazione(
     val dataIngresso: Long = System.currentTimeMillis(),
     val dataPronto: Long? = null,
     val dataConsegna: Long? = null,
-    val tempoLavoroMs: Long = 0L,
-    val timerAvviatoAl: Long? = null,
-    val statoChiamata: StatoChiamata = StatoChiamata.NON_CHIAMATO,
-    val fotoPaths: List<String> = emptyList()
+    // Timer lavoro effettivo (modifica 2)
+    val tempoLavoroMs: Long = 0L,       // millisecondi totali accumulati in IN_LAVORAZIONE
+    val timerAvviatoAl: Long? = null,   // timestamp avvio ultima sessione (null = timer fermo)
+    val fotoPaths: List<String> = emptyList(),
+    val statoChiamata: StatoChiamata = StatoChiamata.NON_CHIAMATO
 )
+
+enum class StatoChiamata(val label: String) {
+    NON_CHIAMATO("Cliente non ancora chiamato"),
+    CHIAMATO("Cliente chiamato"),
+    CHIAMATO_SENZA_RISPOSTA("Cliente chiamato senza risposta")
+}

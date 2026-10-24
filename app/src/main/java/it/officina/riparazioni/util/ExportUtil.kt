@@ -4,13 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
-import it.officina.riparazioni.data.Cliente
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.data.StatoChiamata
 import it.officina.riparazioni.data.StatoRiparazione
 import it.officina.riparazioni.data.TipoDispositivo
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
 import java.io.FileWriter
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
@@ -24,82 +24,76 @@ object ExportUtil {
     private val dtFmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALIAN)
     private val dFmt  = SimpleDateFormat("dd/MM/yyyy", Locale.ITALIAN)
 
-    // ─── EXPORT ZIP (riparazioni + clienti) ────────────────────────────────────
+    data class ImportData(
+        val riparazioni: List<Riparazione>,
+        val clienti: List<ClienteInfo>
+    )
 
-    /**
-     * Esporta un file ZIP contenente due CSV:
-     *  - riparazioni.csv  (con colonna clienteId per collegare al cliente)
-     *  - clienti.csv
-     */
-    fun esportaZip(ctx: Context, riparazioni: List<Riparazione>, clienti: List<Cliente>): File {
+    data class ClienteInfo(val nome: String, val telefono: String)
+
+    // ─── EXPORT ZIP ────────────────────────────────────────────────────────────
+
+    fun esportaZip(ctx: Context, riparazioni: List<Riparazione>): File {
         val outDir = File(ctx.filesDir, "export").apply { if (!exists()) mkdirs() }
-        val ts = DateFmt.datetime(System.currentTimeMillis())
+        val timestamp = DateFmt.datetime(System.currentTimeMillis())
             .replace("/", "-").replace(":", "-").replace(" ", "_")
-        val zipFile = File(outDir, "backup_$ts.zip")
+        val zipFile = File(outDir, "backup_riparazioni_$timestamp.zip")
 
-        ZipOutputStream(zipFile.outputStream()).use { zos ->
-            // CSV riparazioni
+        ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
             zos.putNextEntry(ZipEntry("riparazioni.csv"))
-            zos.write(csvRiparazioni(riparazioni).toByteArray(Charsets.UTF_8))
+            val ripCsv = buildString {
+                appendLine(
+                    "Numero;Cliente;Telefono;Tipo;Marca/Modello;Problema;" +
+                    "Note;Prezzo;Stato;Data Ingresso;Data Pronto;Data Consegna;" +
+                    "Tempo Lavoro (ms);StatoChiamata"
+                )
+                riparazioni.forEach { r ->
+                    appendLine(
+                        listOf(
+                            r.numeroProgressivo, r.cliente, r.telefono,
+                            r.tipoDispositivo.label, r.marcaModello,
+                            r.problema.replace("\n", " "),
+                            r.noteInterne.replace("\n", " "),
+                            r.prezzoRiparazione, r.stato.label,
+                            DateFmt.full(r.dataIngresso),
+                            r.dataPronto?.let { DateFmt.datetime(it) } ?: "",
+                            r.dataConsegna?.let { DateFmt.datetime(it) } ?: "",
+                            r.tempoLavoroMs.toString(),
+                            r.statoChiamata.name
+                        ).joinToString(";") { campo -> "\"${campo.replace("\"", "\"\"")}\"" }
+                    )
+                }
+            }
+            zos.write(ripCsv.toByteArray(Charsets.UTF_8))
             zos.closeEntry()
-            // CSV clienti
+
             zos.putNextEntry(ZipEntry("clienti.csv"))
-            zos.write(csvClienti(clienti).toByteArray(Charsets.UTF_8))
+            val clientiDistinti = riparazioni
+                .map { ClienteInfo(it.cliente, it.telefono) }
+                .distinctBy { it.nome }
+                .filter { it.nome.isNotBlank() }
+            val clientiCsv = buildString {
+                appendLine("Nome;Telefono")
+                clientiDistinti.forEach { c ->
+                    appendLine(
+                        listOf(c.nome, c.telefono)
+                            .joinToString(";") { campo -> "\"${campo.replace("\"", "\"\"")}\"" }
+                    )
+                }
+            }
+            zos.write(clientiCsv.toByteArray(Charsets.UTF_8))
             zos.closeEntry()
         }
         return zipFile
     }
 
-    /** Mantiene anche esportazione solo-CSV per retrocompatibilità */
-    fun esportaCsv(ctx: Context, riparazioni: List<Riparazione>): File {
-        val outDir = File(ctx.filesDir, "export").apply { if (!exists()) mkdirs() }
-        val ts = DateFmt.datetime(System.currentTimeMillis())
-            .replace("/", "-").replace(":", "-").replace(" ", "_")
-        val file = File(outDir, "riparazioni_$ts.csv")
-        FileWriter(file, Charsets.UTF_8).use { it.write(csvRiparazioni(riparazioni)) }
-        return file
-    }
-
-    private fun csvRiparazioni(riparazioni: List<Riparazione>): String {
-        val sb = StringBuilder()
-        sb.appendLine("Numero;ClienteId;Cliente;Telefono;Tipo;Marca/Modello;Problema;" +
-            "Note;Prezzo;Stato;StatoChiamata;Data Ingresso;Data Pronto;Data Consegna;Tempo Lavoro (ms)")
-        riparazioni.forEach { r ->
-            sb.appendLine(listOf(
-                r.numeroProgressivo,
-                r.clienteId?.toString() ?: "",
-                r.cliente, r.telefono,
-                r.tipoDispositivo.label, r.marcaModello,
-                r.problema.replace("\n", " "), r.noteInterne.replace("\n", " "),
-                r.prezzoRiparazione, r.stato.label,
-                r.statoChiamata.name,
-                DateFmt.full(r.dataIngresso),
-                r.dataPronto?.let { DateFmt.datetime(it) } ?: "",
-                r.dataConsegna?.let { DateFmt.datetime(it) } ?: "",
-                r.tempoLavoroMs.toString()
-            ).joinToString(";") { campo -> "\"${campo.replace("\"", "\"\"")}\"" })
-        }
-        return sb.toString()
-    }
-
-    private fun csvClienti(clienti: List<Cliente>): String {
-        val sb = StringBuilder()
-        sb.appendLine("Id;Nome;Cognome;Telefono;Indirizzo;Note")
-        clienti.forEach { c ->
-            sb.appendLine(listOf(
-                c.id.toString(), c.nome, c.cognome, c.telefono,
-                c.indirizzo.replace("\n", " "), c.note.replace("\n", " ")
-            ).joinToString(";") { campo -> "\"${campo.replace("\"", "\"\"")}\"" })
-        }
-        return sb.toString()
-    }
-
-    fun condividi(ctx: Context, file: File, mimeType: String = "application/zip") {
+    fun condividi(ctx: Context, file: File) {
+        val mime = if (file.name.endsWith(".zip")) "application/zip" else "text/csv"
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = mimeType
+            type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Backup Riparazioni EMG")
+            putExtra(Intent.EXTRA_SUBJECT, "Backup riparazioni")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         ctx.startActivity(Intent.createChooser(intent, "Condividi backup").apply {
@@ -107,133 +101,152 @@ object ExportUtil {
         })
     }
 
-    // Alias per compatibilità con chiamate esistenti
-    fun condividiCsv(ctx: Context, file: File) = condividi(ctx, file, "text/csv")
+    fun condividiCsv(ctx: Context, file: File) = condividi(ctx, file)
+
+    fun esportaCsv(ctx: Context, riparazioni: List<Riparazione>): File = esportaZip(ctx, riparazioni)
 
     // ─── IMPORT ────────────────────────────────────────────────────────────────
 
-    data class ImportData(
-        val riparazioni: List<Riparazione>,
-        val clienti: List<Cliente>
-    )
-
-    /**
-     * Legge un file ZIP (con clienti.csv + riparazioni.csv)
-     * oppure un CSV singolo (solo riparazioni, retrocompatibilità).
-     */
     fun leggi(ctx: Context, uri: Uri): ImportData {
-        val nome = nomeFile(ctx, uri)?.lowercase() ?: ""
-        return if (nome.endsWith(".zip")) leggiZip(ctx, uri)
-               else ImportData(leggiCsvRiparazioni(ctx, uri), emptyList())
+        val fileName = ctx.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            cursor.moveToFirst()
+            if (nameIndex >= 0) cursor.getString(nameIndex) else null
+        } ?: ""
+        return if (fileName.endsWith(".zip", ignoreCase = true)) leggiZip(ctx, uri)
+        else ImportData(leggiCsv(ctx, uri), emptyList())
+    }
+
+    fun leggiCsv(ctx: Context, uri: Uri): List<Riparazione> {
+        val righe = mutableListOf<Riparazione>()
+        ctx.contentResolver.openInputStream(uri)?.use { stream ->
+            val reader = BufferedReader(InputStreamReader(stream, Charsets.UTF_8))
+            val header = reader.readLine() ?: throw IllegalArgumentException("File CSV vuoto")
+            if (!header.startsWith("Numero")) throw IllegalArgumentException("Intestazione CSV non valida")
+            val hasStatoChiamata = header.contains("StatoChiamata")
+            reader.forEachLine { line ->
+                if (line.isBlank()) return@forEachLine
+                val campi = parseCsvLine(line)
+                if (campi.size < 12) return@forEachLine
+                try {
+                    righe.add(Riparazione(
+                        id = 0,
+                        numeroProgressivo = campi[0], cliente = campi[1], telefono = campi[2],
+                        tipoDispositivo = TipoDispositivo.values().firstOrNull { it.label == campi[3] } ?: TipoDispositivo.ALTRO,
+                        marcaModello = campi[4], problema = campi[5], noteInterne = campi[6],
+                        prezzoRiparazione = campi[7],
+                        stato = StatoRiparazione.values().firstOrNull { it.label == campi[8] } ?: StatoRiparazione.IN_ATTESA,
+                        dataIngresso = parseData(campi[9]) ?: System.currentTimeMillis(),
+                        dataPronto = parseData(campi[10]), dataConsegna = parseData(campi[11]),
+                        tempoLavoroMs = if (campi.size > 12) campi[12].toLongOrNull() ?: 0L else 0L,
+                        timerAvviatoAl = null, fotoPaths = emptyList(),
+                        statoChiamata = if (hasStatoChiamata && campi.size > 13) {
+                            try { StatoChiamata.valueOf(campi[13]) } catch (_: Exception) { StatoChiamata.NON_CHIAMATO }
+                        } else StatoChiamata.NON_CHIAMATO
+                    ))
+                } catch (_: Exception) {}
+            }
+        } ?: throw IllegalArgumentException("Impossibile aprire il file")
+        return righe
     }
 
     private fun leggiZip(ctx: Context, uri: Uri): ImportData {
-        var riparazioni = emptyList<Riparazione>()
-        var clienti     = emptyList<Cliente>()
-        ctx.contentResolver.openInputStream(uri)?.use { input ->
-            ZipInputStream(input).use { zis ->
+        var riparazioni = listOf<Riparazione>()
+        val clienti = mutableListOf<ClienteInfo>()
+        ctx.contentResolver.openInputStream(uri)?.use { stream ->
+            ZipInputStream(stream).use { zis ->
                 var entry = zis.nextEntry
                 while (entry != null) {
-                    val testo = zis.readBytes().toString(Charsets.UTF_8)
+                    val content = zis.readBytes().toString(Charsets.UTF_8)
                     when (entry.name) {
-                        "riparazioni.csv" -> riparazioni = parseCsvRiparazioni(testo)
-                        "clienti.csv"     -> clienti     = parseCsvClienti(testo)
+                        "riparazioni.csv" -> riparazioni = parseCsvRiparazioniStr(content)
+                        "clienti.csv"     -> clienti.addAll(parseCsvClientiStr(content))
                     }
+                    zis.closeEntry()
                     entry = zis.nextEntry
                 }
             }
-        } ?: throw IllegalArgumentException("Impossibile aprire il file")
+        } ?: throw IllegalArgumentException("Impossibile aprire il file ZIP")
         return ImportData(riparazioni, clienti)
     }
 
-    private fun leggiCsvRiparazioni(ctx: Context, uri: Uri): List<Riparazione> {
-        val testo = ctx.contentResolver.openInputStream(uri)
-            ?.readBytes()?.toString(Charsets.UTF_8)
-            ?: throw IllegalArgumentException("Impossibile aprire il file")
-        return parseCsvRiparazioni(testo)
-    }
-
-    // Mantieni alias per chiamate vecchie
-    fun leggiCsv(ctx: Context, uri: Uri): List<Riparazione> = leggi(ctx, uri).riparazioni
-
-    private fun parseCsvRiparazioni(testo: String): List<Riparazione> {
-        val righe = testo.lines().filter { it.isNotBlank() }
-        if (righe.isEmpty()) throw IllegalArgumentException("File CSV vuoto")
-        val header = righe.first()
-        if (!header.startsWith("Numero")) throw IllegalArgumentException("Intestazione CSV non valida")
-        return righe.drop(1).mapNotNull { line ->
-            runCatching {
-                val f = parseCsvLine(line)
-                if (f.size < 12) return@mapNotNull null
-                // Supporta sia formato vecchio (senza ClienteId e StatoChiamata)
-                // che formato nuovo (con entrambi)
-                val hasClienteId  = header.contains("ClienteId")
-                val hasStatoChiam = header.contains("StatoChiamata")
-                var idx = 0
-                val numero       = f[idx++]
-                val clienteId    = if (hasClienteId) f[idx++].toLongOrNull() else null
-                val cliente      = f[idx++]
-                val telefono     = f[idx++]
-                val tipo         = TipoDispositivo.values().firstOrNull { it.label == f[idx++] } ?: TipoDispositivo.ALTRO
-                val marcaModello = f[idx++]
-                val problema     = f[idx++]
-                val note         = f[idx++]
-                val prezzo       = f[idx++]
-                val stato        = StatoRiparazione.values().firstOrNull { it.label == f[idx++] } ?: StatoRiparazione.IN_ATTESA
-                val statoChiam   = if (hasStatoChiam) { try { StatoChiamata.valueOf(f[idx++]) } catch (_: Exception) { StatoChiamata.NON_CHIAMATO } } else StatoChiamata.NON_CHIAMATO
-                val dataIngresso = parseData(f[idx++]) ?: System.currentTimeMillis()
-                val dataPronto   = parseData(f.getOrElse(idx++) { "" })
-                val dataConsegna = parseData(f.getOrElse(idx++) { "" })
-                val tempoMs      = f.getOrElse(idx) { "0" }.toLongOrNull() ?: 0L
-                Riparazione(id = 0, numeroProgressivo = numero, clienteId = clienteId,
-                    cliente = cliente, telefono = telefono, tipoDispositivo = tipo,
-                    marcaModello = marcaModello, problema = problema, noteInterne = note,
-                    prezzoRiparazione = prezzo, stato = stato, statoChiamata = statoChiam,
-                    dataIngresso = dataIngresso, dataPronto = dataPronto, dataConsegna = dataConsegna,
-                    tempoLavoroMs = tempoMs, timerAvviatoAl = null, fotoPaths = emptyList())
-            }.getOrNull()
+    private fun parseCsvRiparazioniStr(content: String): List<Riparazione> {
+        val righe = mutableListOf<Riparazione>()
+        val lines = content.lines()
+        if (lines.isEmpty()) return righe
+        val header = lines[0]
+        val hasStatoChiamata = header.contains("StatoChiamata")
+        lines.drop(1).forEach { line ->
+            if (line.isBlank()) return@forEach
+            val campi = parseCsvLine(line)
+            if (campi.size < 12) return@forEach
+            try {
+                righe.add(Riparazione(
+                    id = 0,
+                    numeroProgressivo = campi[0], cliente = campi[1], telefono = campi[2],
+                    tipoDispositivo = TipoDispositivo.values().firstOrNull { it.label == campi[3] } ?: TipoDispositivo.ALTRO,
+                    marcaModello = campi[4], problema = campi[5], noteInterne = campi[6],
+                    prezzoRiparazione = campi[7],
+                    stato = StatoRiparazione.values().firstOrNull { it.label == campi[8] } ?: StatoRiparazione.IN_ATTESA,
+                    dataIngresso = parseData(campi[9]) ?: System.currentTimeMillis(),
+                    dataPronto = parseData(campi[10]), dataConsegna = parseData(campi[11]),
+                    tempoLavoroMs = if (campi.size > 12) campi[12].toLongOrNull() ?: 0L else 0L,
+                    timerAvviatoAl = null, fotoPaths = emptyList(),
+                    statoChiamata = if (hasStatoChiamata && campi.size > 13) {
+                        try { StatoChiamata.valueOf(campi[13]) } catch (_: Exception) { StatoChiamata.NON_CHIAMATO }
+                    } else StatoChiamata.NON_CHIAMATO
+                ))
+            } catch (_: Exception) {}
         }
+        return righe
     }
 
-    private fun parseCsvClienti(testo: String): List<Cliente> {
-        val righe = testo.lines().filter { it.isNotBlank() }
-        if (righe.size < 2) return emptyList()
-        return righe.drop(1).mapNotNull { line ->
-            runCatching {
-                val f = parseCsvLine(line)
-                if (f.size < 6) return@mapNotNull null
-                Cliente(id = f[0].toLongOrNull() ?: 0L,
-                    nome = f[1], cognome = f[2], telefono = f[3],
-                    indirizzo = f[4], note = f[5])
-            }.getOrNull()
+    private fun parseCsvClientiStr(content: String): List<ClienteInfo> {
+        val result = mutableListOf<ClienteInfo>()
+        val lines = content.lines()
+        if (lines.size < 2) return result
+        lines.drop(1).forEach { line ->
+            if (line.isBlank()) return@forEach
+            val campi = parseCsvLine(line)
+            if (campi.size >= 2) result.add(ClienteInfo(nome = campi[0], telefono = campi[1]))
+            else if (campi.size == 1 && campi[0].isNotBlank()) result.add(ClienteInfo(nome = campi[0], telefono = ""))
         }
+        return result
     }
 
-    // ─── PERCORSO FOTO ─────────────────────────────────────────────────────────
+    // ─── CARTELLA FOTO ───────────────────────────────────────────────────────────
+
     fun pathFoto(ctx: Context): String = File(ctx.filesDir, "photos").absolutePath
 
     fun apriCartellaFoto(ctx: Context) {
         val dir = File(ctx.filesDir, "photos").apply { if (!exists()) mkdirs() }
         try {
             val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", dir)
-            ctx.startActivity(Intent(Intent.ACTION_VIEW).apply {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "resource/folder")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
+            }
+            ctx.startActivity(intent)
         } catch (_: Exception) {
-            try { ctx.startActivity(Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*"; addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) }
-            catch (_: Exception) {}
+            try {
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "image/*"; addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                ctx.startActivity(intent)
+            } catch (_: Exception) {}
         }
     }
 
-    // ─── UTILITY ───────────────────────────────────────────────────────────────
+    // ─── UTILITY PRIVATI ────────────────────────────────────────────────────────
+
     private fun parseCsvLine(line: String): List<String> {
-        val result = mutableListOf<String>(); var i = 0
+        val result = mutableListOf<String>()
+        var i = 0
         while (i < line.length) {
             if (line[i] == '"') {
                 val sb = StringBuilder(); i++
                 while (i < line.length) {
-                    if (line[i] == '"' && i + 1 < line.length && line[i+1] == '"') { sb.append('"'); i += 2 }
+                    if (line[i] == '"' && i + 1 < line.length && line[i + 1] == '"') { sb.append('"'); i += 2 }
                     else if (line[i] == '"') { i++; break }
                     else sb.append(line[i++])
                 }
@@ -249,13 +262,7 @@ object ExportUtil {
 
     private fun parseData(s: String): Long? {
         if (s.isBlank()) return null
-        return try { dtFmt.parse(s)?.time } catch (_: Exception) {
-            try { dFmt.parse(s)?.time } catch (_: Exception) { null }
-        }
+        return try { dtFmt.parse(s)?.time }
+        catch (_: Exception) { try { dFmt.parse(s)?.time } catch (_: Exception) { null } }
     }
-
-    private fun nomeFile(ctx: Context, uri: Uri): String? =
-        ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getString(0) else null
-        }
 }

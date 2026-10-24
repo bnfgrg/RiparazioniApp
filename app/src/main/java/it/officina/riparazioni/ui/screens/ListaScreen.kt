@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -48,12 +47,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,8 +74,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import it.officina.riparazioni.BuildConfig
-import java.text.SimpleDateFormat
-import java.util.Date
 import it.officina.riparazioni.R
 import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.ui.FiltroStato
@@ -90,6 +89,7 @@ import it.officina.riparazioni.ui.theme.ColorPronto
 import it.officina.riparazioni.ui.components.PallinoStato
 import it.officina.riparazioni.util.DateFmt
 import it.officina.riparazioni.util.ExportUtil
+import it.officina.riparazioni.util.FontScaleManager
 import kotlinx.coroutines.launch
 
 private enum class ModalitaImport { TOTALE, AGGIUNTIVA_SOVRASCRIVI, AGGIUNTIVA_IGNORA }
@@ -99,8 +99,7 @@ private enum class ModalitaImport { TOTALE, AGGIUNTIVA_SOVRASCRIVI, AGGIUNTIVA_I
 fun ListaScreen(
     vm: RiparazioneViewModel,
     onApri: (Long) -> Unit,
-    onNuova: () -> Unit,
-    onApriAnagrafica: () -> Unit = {}
+    onNuova: () -> Unit
 ) {
     val items  by vm.filtrate.collectAsStateWithLifecycle()
     val query  by vm.query.collectAsStateWithLifecycle()
@@ -113,27 +112,27 @@ fun ListaScreen(
     val ctx   = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // Font scale da DataStore
+    val fontScale by FontScaleManager.fontScaleFlow(ctx).collectAsState(initial = FontScaleManager.DEFAULT)
+    var mostraFontSlider by remember { mutableStateOf(false) }
+
     var mostraMenu                   by remember { mutableStateOf(false) }
     var mostraDialogCancellaAll      by remember { mutableStateOf(false) }
     var mostraDialogCancellaConferma by remember { mutableStateOf(false) }
     var mostraDialogPathFoto         by remember { mutableStateOf(false) }
     var mostraDialogEliminaFiltrati  by remember { mutableStateOf(false) }
 
-    // Import CSV
-    var csvRighe               by remember { mutableStateOf<List<Riparazione>?>(null) }
-    var csvImportData          by remember { mutableStateOf<ExportUtil.ImportData?>(null) }
-    var mostraDialogImportScelta by remember { mutableStateOf(false) }
+    var importData                 by remember { mutableStateOf<ExportUtil.ImportData?>(null) }
+    var mostraDialogImportScelta   by remember { mutableStateOf(false) }
     var mostraDialogImportConferma by remember { mutableStateOf(false) }
-    var importModalita         by remember { mutableStateOf(ModalitaImport.TOTALE) }
-    var importResult           by remember { mutableStateOf<String?>(null) }
-    var importError            by remember { mutableStateOf<String?>(null) }
+    var importModalita             by remember { mutableStateOf(ModalitaImport.TOTALE) }
+    var importResult               by remember { mutableStateOf<String?>(null) }
+    var importError                by remember { mutableStateOf<String?>(null) }
 
-    val csvPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val importData = ExportUtil.leggi(ctx, uri)
-            csvRighe = importData.riparazioni
-            csvImportData = importData
+            importData = ExportUtil.leggi(ctx, uri)
             mostraDialogImportScelta = true
         } catch (e: Exception) {
             importError = "Errore lettura file: ${e.message}"
@@ -167,40 +166,40 @@ fun ListaScreen(
                         Column {
                             Text(stringResource(R.string.lista_titolo))
                             Text(
-                                run {
-                                    val ms = (BuildConfig.VERSION_CODE.toLong() + 28270080L) * 60000L
-                                    val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.ITALIAN)
-                                    "v${BuildConfig.VERSION_NAME}  build ${fmt.format(Date(ms))}"
-                                },
+                                "v${BuildConfig.VERSION_NAME}  build ${BuildConfig.VERSION_CODE}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     actions = {
+                        // Bottone font scale
+                        IconButton(onClick = { mostraFontSlider = !mostraFontSlider }) {
+                            Text(
+                                text = "A",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (mostraFontSlider) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         IconButton(onClick = { mostraMenu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                         DropdownMenu(expanded = mostraMenu, onDismissRequest = { mostraMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Anagrafica clienti") },
-                                leadingIcon = { Icon(Icons.Default.People, null) },
-                                onClick = { mostraMenu = false; onApriAnagrafica() }
-                            )
                             DropdownMenuItem(
                                 text = { Text("Esporta backup (ZIP)") },
                                 leadingIcon = { Icon(Icons.Default.FileDownload, null) },
                                 onClick = {
                                     mostraMenu = false
                                     scope.launch {
-                                        val f = ExportUtil.esportaZip(ctx, tutte, vm.clienti.value)
+                                        val f = ExportUtil.esportaZip(ctx, tutte)
                                         ExportUtil.condividi(ctx, f)
                                     }
                                 }
                             )
-                            // MODIFICA 4: import CSV
                             DropdownMenuItem(
-                                text = { Text("Importa da CSV") },
+                                text = { Text("Importa da ZIP / CSV") },
                                 leadingIcon = { Icon(Icons.Default.FileUpload, null) },
-                                onClick = { mostraMenu = false; csvPickerLauncher.launch("*/*") }
+                                onClick = { mostraMenu = false; filePicker.launch("*/*") }
                             )
                             DropdownMenuItem(
                                 text = { Text("Cancella tutte le schede") },
@@ -228,6 +227,62 @@ fun ListaScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+
+            // Font scale control bar - visibile quando mostraFontSlider = true
+            if (mostraFontSlider) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    FontScaleManager.setFontScale(ctx, fontScale - FontScaleManager.STEP)
+                                }
+                            },
+                            enabled = fontScale > FontScaleManager.MIN
+                        ) {
+                            Text("A−", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                color = if (fontScale > FontScaleManager.MIN)
+                                    MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                        }
+                        Slider(
+                            value = fontScale,
+                            onValueChange = { newVal ->
+                                scope.launch { FontScaleManager.setFontScale(ctx, newVal) }
+                            },
+                            valueRange = FontScaleManager.MIN..FontScaleManager.MAX,
+                            steps = ((FontScaleManager.MAX - FontScaleManager.MIN) / FontScaleManager.STEP - 1).toInt(),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    FontScaleManager.setFontScale(ctx, fontScale + FontScaleManager.STEP)
+                                }
+                            },
+                            enabled = fontScale < FontScaleManager.MAX
+                        ) {
+                            Text("A+", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                                color = if (fontScale < FontScaleManager.MAX)
+                                    MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                        }
+                        TextButton(onClick = {
+                            scope.launch { FontScaleManager.setFontScale(ctx, FontScaleManager.DEFAULT) }
+                        }) {
+                            Text("Reset", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+
             if (!inSelezione) {
                 OutlinedTextField(
                     value = query, onValueChange = { vm.setQuery(it) },
@@ -283,6 +338,7 @@ fun ListaScreen(
                     items(items, key = { it.id }) { r ->
                         CardRiparazione(
                             r = r, inSelezione = inSelezione, selezionata = selezione.contains(r.id),
+                            fontScale = fontScale,
                             onTap = {
                                 if (inSelezione) selezione = if (selezione.contains(r.id)) selezione - r.id else selezione + r.id
                                 else onApri(r.id)
@@ -309,7 +365,6 @@ fun ListaScreen(
         )
     }
 
-    // Dialog elimina filtrati
     if (mostraDialogEliminaFiltrati) {
         val desc = buildString {
             if (query.isNotEmpty()) append("cliente/modello: '$query'")
@@ -331,7 +386,6 @@ fun ListaScreen(
         )
     }
 
-    // Dialog cancella tutto (1a conferma)
     if (mostraDialogCancellaAll) {
         AlertDialog(
             onDismissRequest = { mostraDialogCancellaAll = false },
@@ -342,7 +396,6 @@ fun ListaScreen(
         )
     }
 
-    // Dialog cancella tutto (2a conferma)
     if (mostraDialogCancellaConferma) {
         AlertDialog(
             onDismissRequest = { mostraDialogCancellaConferma = false },
@@ -353,7 +406,6 @@ fun ListaScreen(
         )
     }
 
-    // MODIFICA 3: Dialog path foto con pulsante apri galleria
     if (mostraDialogPathFoto) {
         val pathFoto = ExportUtil.pathFoto(ctx)
         AlertDialog(
@@ -370,23 +422,24 @@ fun ListaScreen(
                     Text("Per accedere usa un file manager con 'Mostra file interni' abilitato (es. Files by Google).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { ExportUtil.apriCartellaFoto(ctx) }) { Text("Apri galleria") }
-            },
+            confirmButton = { TextButton(onClick = { ExportUtil.apriCartellaFoto(ctx) }) { Text("Apri galleria") } },
             dismissButton = { TextButton(onClick = { mostraDialogPathFoto = false }) { Text("OK") } }
         )
     }
 
-    // MODIFICA 4: Dialog scelta modalità import
-    if (mostraDialogImportScelta && csvRighe != null) {
+    if (mostraDialogImportScelta && importData != null) {
+        val data = importData!!
         AlertDialog(
-            onDismissRequest = { mostraDialogImportScelta = false; csvRighe = null },
-            title = { Text("Importa ${csvRighe!!.size} riparazioni") },
+            onDismissRequest = { mostraDialogImportScelta = false; importData = null },
+            title = { Text("Importa ${data.riparazioni.size} riparazioni") },
             text = {
                 Column {
-                    Text("Come vuoi importare il file CSV?", style = MaterialTheme.typography.bodyMedium)
+                    if (data.clienti.isNotEmpty()) {
+                        Text("File ZIP: ${data.riparazioni.size} riparazioni + ${data.clienti.size} clienti.", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Text("Come vuoi importare?", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
-
                     OpzioneImport(
                         label = "Importazione totale",
                         desc = "Cancella il database attuale e lo sostituisce con il file importato",
@@ -416,38 +469,35 @@ fun ListaScreen(
                         mostraDialogImportConferma = true
                     } else {
                         scope.launch {
-                            val righe = csvRighe ?: return@launch
-                            val data = csvImportData ?: ExportUtil.ImportData(righe, emptyList())
-                                val (tot, nuovi, altri) = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
-                                vm.importaAggiuntivaSovrascrivi(data) else vm.importaAggiuntivaIgnora(data)
+                            val righe = importData?.riparazioni ?: return@launch
+                            val (tot, nuovi, altri) = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
+                                vm.importaAggiuntivaSovrascrivi(righe) else vm.importaAggiuntivaIgnora(righe)
                             val etichetta = if (importModalita == ModalitaImport.AGGIUNTIVA_SOVRASCRIVI)
                                 "$nuovi nuove, $altri aggiornate" else "$nuovi nuove, $altri saltate"
                             importResult = "Importati $tot: $etichetta"
-                            csvRighe = null; csvImportData = null
+                            importData = null
                         }
                     }
                 }) { Text("Avanti") }
             },
-            dismissButton = { TextButton(onClick = { mostraDialogImportScelta = false; csvRighe = null }) { Text("Annulla") } }
+            dismissButton = { TextButton(onClick = { mostraDialogImportScelta = false; importData = null }) { Text("Annulla") } }
         )
     }
 
-    // Dialog conferma importazione totale
     if (mostraDialogImportConferma) {
         AlertDialog(
             onDismissRequest = { mostraDialogImportConferma = false },
             title = { Text("Importazione totale") },
-            text = { Text("Il database attuale (${tutte.size} schede) verrà cancellato e sostituito con le ${csvRighe?.size ?: 0} schede del CSV.\n\nI dati attuali non saranno recuperabili.", style = MaterialTheme.typography.bodyMedium) },
+            text = { Text("Il database attuale (${tutte.size} schede) verrà cancellato e sostituito con le ${importData?.riparazioni?.size ?: 0} schede del file.\n\nI dati attuali non saranno recuperabili.", style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         mostraDialogImportConferma = false
                         scope.launch {
-                            val righe = csvRighe ?: return@launch
-                            val data = csvImportData ?: ExportUtil.ImportData(righe, emptyList())
-                            val (tot, nuovi, _) = vm.importaTotale(data)
+                            val righe = importData?.riparazioni ?: return@launch
+                            val (tot, nuovi, _) = vm.importaTotale(righe)
                             importResult = "Importazione totale: $nuovi schede importate su $tot"
-                            csvRighe = null; csvImportData = null
+                            importData = null
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = ColorDanger)
@@ -457,7 +507,6 @@ fun ListaScreen(
         )
     }
 
-    // Risultato import
     importResult?.let { msg ->
         AlertDialog(
             onDismissRequest = { importResult = null },
@@ -467,7 +516,6 @@ fun ListaScreen(
         )
     }
 
-    // Errore import
     importError?.let { err ->
         AlertDialog(
             onDismissRequest = { importError = null },
@@ -486,10 +534,7 @@ private fun OpzioneImport(label: String, desc: String, selected: Boolean, onClic
                 else MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.Top
-        ) {
+        Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.Top) {
             RadioButton(selected = selected, onClick = onClick)
             Spacer(Modifier.width(8.dp))
             Column {
@@ -503,8 +548,12 @@ private fun OpzioneImport(label: String, desc: String, selected: Boolean, onClic
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CardRiparazione(
-    r: Riparazione, inSelezione: Boolean, selezionata: Boolean,
-    onTap: () -> Unit, onLongTap: () -> Unit
+    r: Riparazione,
+    inSelezione: Boolean,
+    selezionata: Boolean,
+    fontScale: Float,
+    onTap: () -> Unit,
+    onLongTap: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(0.dp),
@@ -527,21 +576,31 @@ private fun CardRiparazione(
             }
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                // Font +20% rispetto ai valori base del tema
-                Text(r.cliente.ifEmpty { "Senza nome" },
+                // font +20% su bodyLarge (16sp → ~19sp), scalato dall'utente
+                Text(
+                    r.cliente.ifEmpty { "Senza nome" },
                     fontWeight = FontWeight.Medium,
-                    fontSize = 19.sp)
-                Text(r.marcaModello.ifEmpty { r.tipoDispositivo.label },
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 17.sp,
-                    color = MaterialTheme.colorScheme.onSurface)
+                    fontSize = (19 * fontScale).sp
+                )
+                // bodySmall (12sp → ~14sp), scalato
+                Text(
+                    r.marcaModello.ifEmpty { r.tipoDispositivo.label },
+                    fontSize = (14 * fontScale).sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("#${r.numeroProgressivo} · ${DateFmt.short(r.dataIngresso)}",
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "#${r.numeroProgressivo} · ${DateFmt.short(r.dataIngresso)}",
+                        fontSize = (11 * fontScale).sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     if (r.tempoLavoroMs > 0 || r.timerAvviatoAl != null) {
                         val extra = if (r.timerAvviatoAl != null) System.currentTimeMillis() - r.timerAvviatoAl else 0L
-                        Text("⏱ ${DateFmt.durata(r.tempoLavoroMs + extra)}",
-                            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "⏱ ${DateFmt.durata(r.tempoLavoroMs + extra)}",
+                            fontSize = (11 * fontScale).sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

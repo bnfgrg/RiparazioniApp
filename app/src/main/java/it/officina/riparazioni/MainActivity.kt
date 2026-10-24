@@ -14,10 +14,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import it.officina.riparazioni.ui.RiparazioneVMFactory
 import it.officina.riparazioni.ui.RiparazioneViewModel
-import it.officina.riparazioni.ui.screens.*
+import it.officina.riparazioni.ui.screens.AnagraficaClienteScreen
+import it.officina.riparazioni.ui.screens.DettaglioScreen
+import it.officina.riparazioni.ui.screens.ListaScreen
 import it.officina.riparazioni.ui.theme.RiparazioniTheme
 
 class MainActivity : ComponentActivity() {
+
     private val viewModel: RiparazioneViewModel by viewModels {
         RiparazioneVMFactory((application as RiparazioniApp).repository)
     }
@@ -25,66 +28,38 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
+
         setContent {
             RiparazioniTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = "lista") {
-
-                        // Lista riparazioni
                         composable("lista") {
                             ListaScreen(
                                 vm = viewModel,
-                                onApri = { nav.navigate("dettaglio/$it") },
-                                onNuova = { nav.navigate("dettaglio/0") },
-                                onApriAnagrafica = { nav.navigate("anagrafica") }
+                                onApri = { id -> nav.navigate("dettaglio/$id") },
+                                onNuova = { nav.navigate("dettaglio/0") }
                             )
                         }
-
-                        // Dettaglio/nuova riparazione
                         composable("dettaglio/{id}") { back ->
-                            val id = back.arguments?.getString("id")?.toLongOrNull() ?: 0L
+                            val idStr = back.arguments?.getString("id")
+                            val id = idStr?.toLongOrNull() ?: 0L
                             DettaglioScreen(
                                 vm = viewModel,
                                 riparazioneId = if (id == 0L) null else id,
                                 onIndietro = { nav.popBackStack() },
-                                onNuovoCliente = {
-                                    // Vai a nuovo cliente nel flusso riparazione
-                                    nav.navigate("riparazione/nuovo-cliente")
-                                }
+                                onNuovoCliente = { nav.navigate("anagrafica-cliente?fromRiparazione=true") }
                             )
                         }
-
-                        // Lista clienti
-                        composable("anagrafica") {
-                            AnagraficaListaScreen(
+                        composable("anagrafica-cliente?fromRiparazione={fromRiparazione}") { back ->
+                            val fromRip = back.arguments?.getString("fromRiparazione")?.toBooleanStrictOrNull() ?: false
+                            AnagraficaClienteScreen(
                                 vm = viewModel,
-                                onApriCliente = { nav.navigate("anagrafica/cliente/$it") },
-                                onNuovoCliente = { nav.navigate("anagrafica/cliente/0") },
+                                fromRiparazione = fromRip,
                                 onIndietro = { nav.popBackStack() }
-                            )
-                        }
-
-                        // Dettaglio/nuovo cliente (da anagrafica)
-                        composable("anagrafica/cliente/{id}") { back ->
-                            val id = back.arguments?.getString("id")?.toLongOrNull() ?: 0L
-                            AnagraficaDettaglioScreen(
-                                vm = viewModel,
-                                clienteId = if (id == 0L) null else id,
-                                onIndietro = { nav.popBackStack() },
-                                onApriRiparazione = { nav.navigate("dettaglio/$it") },
-                                fromRiparazione = false
-                            )
-                        }
-
-                        // Nuovo cliente aperto dal flusso nuova riparazione
-                        composable("riparazione/nuovo-cliente") {
-                            AnagraficaDettaglioScreen(
-                                vm = viewModel,
-                                clienteId = null,
-                                onIndietro = { nav.popBackStack() },
-                                onApriRiparazione = { nav.navigate("dettaglio/$it") },
-                                fromRiparazione = true
                             )
                         }
                     }

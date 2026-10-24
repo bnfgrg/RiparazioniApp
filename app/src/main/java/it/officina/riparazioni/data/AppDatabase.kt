@@ -1,12 +1,15 @@
 package it.officina.riparazioni.data
 
 import android.content.Context
-import androidx.room.*
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Riparazione::class, Cliente::class],
+    entities = [Riparazione::class],
     version = 5,
     exportSchema = false
 )
@@ -14,7 +17,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun riparazioneDao(): RiparazioneDao
-    abstract fun clienteDao(): ClienteDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -35,19 +37,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Crea tabella clienti
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS clienti (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        nome TEXT NOT NULL DEFAULT '',
-                        cognome TEXT NOT NULL DEFAULT '',
-                        telefono TEXT NOT NULL DEFAULT '',
-                        indirizzo TEXT NOT NULL DEFAULT '',
-                        note TEXT NOT NULL DEFAULT ''
-                    )
-                """.trimIndent())
-                // Aggiunge FK clienteId a riparazioni (nullable)
-                db.execSQL("ALTER TABLE riparazioni ADD COLUMN clienteId INTEGER")
+                db.execSQL("ALTER TABLE riparazioni ADD COLUMN fotoPaths TEXT NOT NULL DEFAULT ''")
             }
         }
 
@@ -60,9 +50,12 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(ctx: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
-                    ctx.applicationContext, AppDatabase::class.java, "riparazioni.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                 .build().also { INSTANCE = it }
+                    ctx.applicationContext,
+                    AppDatabase::class.java,
+                    "riparazioni.db"
+                )
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .build().also { INSTANCE = it }
             }
         }
     }
