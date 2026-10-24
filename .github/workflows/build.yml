@@ -1,5 +1,29 @@
 name: Build Android APK
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FIRMA DELL'APK — IMPORTANTE PER GLI AGGIORNAMENTI
+#
+# Android consente l'aggiornamento di un'app (senza perdita dati) SOLO se
+# la nuova versione è firmata con lo STESSO keystore della versione installata.
+#
+# Il keystore ufficiale è: riparazioni.keystore (incluso nel repo)
+# SHA-256 fingerprint: 64:52:63:37:07:67:EA:62:28:71:6E:2C:FE:53:01:
+#                      A0:4B:42:1D:56:A6:80:D7:7D:C1:84:AE:9F:98:A8:62:F0
+#
+# Per configurare la build sicura su GitHub (raccomandato):
+#   1. Converti il keystore in base64:
+#      base64 -w 0 riparazioni.keystore > keystore.b64
+#   2. In GitHub → Settings → Secrets → Actions, aggiungi:
+#      - KEYSTORE_BASE64  = contenuto di keystore.b64
+#      - STORE_PASSWORD   = riparazioni2024
+#      - KEY_PASSWORD     = riparazioni2024
+#   3. Elimina keystore.b64
+#
+# Se i secret non sono configurati, la build usa il keystore incluso nel repo
+# (riparazioni.keystore). Questo garantisce comunque la firma corretta,
+# ma è meno sicuro perché la password è visibile nel repo.
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [ main, master ]
@@ -10,6 +34,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,14 +48,50 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.5'
+          gradle-version: '8.6'
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      # Preferenza: usa keystore da GitHub Secret (più sicuro).
+      # Fallback: usa riparazioni.keystore incluso nel repo (firma identica, password nel repo).
+      # In nessun caso si usa il debug keystore — la firma DEVE essere sempre quella ufficiale.
+      - name: Prepare keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/riparazioni.keystore"
+            echo "✓ Keystore caricato da GitHub Secret."
+          elif [ -f "$GITHUB_WORKSPACE/riparazioni.keystore" ]; then
+            echo "✓ Keystore trovato nel repository (firma ufficiale garantita)."
+          else
+            echo "✗ ERRORE: riparazioni.keystore non trovato e KEYSTORE_BASE64 non configurato."
+            echo "  La build verrebbe firmata con il debug keystore, incompatibile con versioni precedenti."
+            echo "  Aggiungi il file riparazioni.keystore al repository oppure configura il secret KEYSTORE_BASE64."
+            exit 1
+          fi
 
-      - name: Upload APK artifact
+      - name: Build Release APK
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle assembleRelease --no-daemon --stacktrace \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/riparazioni.keystore" \
+            -Pandroid.injected.signing.store.password="${STORE_PASSWORD:-riparazioni2024}" \
+            -Pandroid.injected.signing.key.alias="riparazioni_key" \
+            -Pandroid.injected.signing.key.password="${KEY_PASSWORD:-riparazioni2024}"
+
+      - name: Verify APK signature
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "APK prodotto: $APK_PATH"
+          # Mostra il fingerprint SHA-256 della firma per verifica
+          keytool -printcert -jarfile "$APK_PATH" 2>/dev/null | grep -E "SHA256:|Owner:" || true
+          echo "✓ Build completata."
+
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
+          name: riparazioni-v${{ github.run_number }}-release
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+          if-no-files-found: error
