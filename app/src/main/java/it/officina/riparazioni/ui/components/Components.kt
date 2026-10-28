@@ -1,14 +1,17 @@
 package it.officina.riparazioni.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -19,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -53,19 +57,41 @@ fun ChipFiltro(
     color: Color,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showDot: Boolean = true
 ) {
+    val shape = RoundedCornerShape(50)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(shape)
             .background(
-                if (selected) color.copy(alpha = 0.2f)
+                if (selected) color.copy(alpha = 0.18f)
                 else MaterialTheme.colorScheme.surfaceVariant
+            )
+            .border(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) color else color.copy(alpha = 0.35f),
+                shape = shape
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showDot) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) color else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

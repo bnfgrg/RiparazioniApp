@@ -204,8 +204,22 @@ fun DettaglioScreen(
                 }
             }
 
+            // ─── TELEFONO ────────────────────────────────────────────────────
+            // Pre-popolato dal cliente collegato; modificabile manualmente
+            Spacer(Modifier.height(12.dp))
+            EtichettaCampo("Telefono")
+            OutlinedTextField(
+                value = r.telefono,
+                onValueChange = { aggiorna(r.copy(telefono = it)) },
+                singleLine = true,
+                placeholder = { Text("Numero di telefono") },
+                leadingIcon = { Icon(Icons.Default.Phone, null, modifier = Modifier.size(18.dp)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth()
+            )
+
             // SMS preso in carico
-            val telEffettivo = clienteCollegato?.telefono ?: r.telefono
+            val telEffettivo = r.telefono.ifBlank { clienteCollegato?.telefono ?: "" }
             if (telEffettivo.isNotEmpty() && (riparazioneId == null || riparazioneId == 0L)) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = {
@@ -302,8 +316,7 @@ fun DettaglioScreen(
             if (telEffettivo.isNotEmpty() && (r.stato == StatoRiparazione.PRONTO || r.stato == StatoRiparazione.CONSEGNATO)) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = {
-                    val rSms = if (clienteCollegato != null) r.copy(cliente = clienteCollegato.nomeCompleto, telefono = clienteCollegato.telefono) else r
-                    SmsUtil.apriSms(ctx, telEffettivo, SmsUtil.messaggioPredefinto(rSms))
+                    SmsUtil.apriSms(ctx, telEffettivo, SmsUtil.messaggioPredefinto(r))
                 }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Sms, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.size(8.dp)); Text("Notifica SMS pronto per il ritiro")
