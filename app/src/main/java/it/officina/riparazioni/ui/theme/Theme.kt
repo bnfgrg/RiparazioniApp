@@ -61,6 +61,7 @@ private val AppTypography = Typography(
 @Composable
 fun RiparazioniTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    fontScale: Float = 1.0f,
     content: @Composable () -> Unit
 ) {
     val colors = if (darkTheme) DarkColors else LightColors
@@ -72,5 +73,14 @@ fun RiparazioniTheme(
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
-    MaterialTheme(colorScheme = colors, typography = AppTypography, content = content)
+    // Scala tutti i font size della typography in base alla preferenza utente
+    val scaledTypography = Typography(
+        titleLarge  = AppTypography.titleLarge.copy(fontSize  = (20 * fontScale).sp),
+        titleMedium = AppTypography.titleMedium.copy(fontSize = (16 * fontScale).sp),
+        bodyLarge   = AppTypography.bodyLarge.copy(fontSize   = (16 * fontScale).sp),
+        bodyMedium  = AppTypography.bodyMedium.copy(fontSize  = (14 * fontScale).sp),
+        bodySmall   = AppTypography.bodySmall.copy(fontSize   = (12 * fontScale).sp),
+        labelSmall  = AppTypography.labelSmall.copy(fontSize  = (11 * fontScale).sp)
+    )
+    MaterialTheme(colorScheme = colors, typography = scaledTypography, content = content)
 }

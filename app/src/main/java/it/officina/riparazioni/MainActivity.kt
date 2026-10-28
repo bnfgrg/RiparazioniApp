@@ -7,7 +7,10 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,6 +19,7 @@ import it.officina.riparazioni.ui.RiparazioneVMFactory
 import it.officina.riparazioni.ui.RiparazioneViewModel
 import it.officina.riparazioni.ui.screens.*
 import it.officina.riparazioni.ui.theme.RiparazioniTheme
+import it.officina.riparazioni.util.FontScaleManager
 
 class MainActivity : ComponentActivity() {
     private val viewModel: RiparazioneViewModel by viewModels {
@@ -26,7 +30,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         setContent {
-            RiparazioniTheme {
+            val ctx = LocalContext.current
+            val fontScale by produceState(initialValue = FontScaleManager.DEFAULT, ctx) {
+                FontScaleManager.fontScaleFlow(ctx).collect { value = it }
+            }
+            RiparazioniTheme(fontScale = fontScale) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val nav = rememberNavController()
                     NavHost(navController = nav, startDestination = "lista") {
