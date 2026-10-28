@@ -20,14 +20,4 @@ class Converters {
 
     @TypeConverter
     fun toList(s: String): List<String> = if (s.isEmpty()) emptyList() else s.split("|||")
-
-    @TypeConverter
-    fun fromStatoChiamata(s: StatoChiamata): String = s.name
-
-    @TypeConverter
-    fun toStatoChiamata(s: String): StatoChiamata = try {
-        StatoChiamata.valueOf(s)
-    } catch (_: Exception) {
-        StatoChiamata.NON_CHIAMATO
-    }
 }

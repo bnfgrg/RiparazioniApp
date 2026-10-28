@@ -1,157 +1,111 @@
 package it.officina.riparazioni.ui
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import it.officina.riparazioni.data.Riparazione
-import it.officina.riparazioni.data.RiparazioneRepository
-import it.officina.riparazioni.data.StatoRiparazione
-import it.officina.riparazioni.util.ExportUtil
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import androidx.lifecycle.*
+import it.officina.riparazioni.data.*
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 enum class FiltroStato {
     TUTTI, ATTESA, LAVORAZIONE, PRONTI, CONSEGNATI;
-
-    fun matches(s: StatoRiparazione): Boolean = when (this) {
-        TUTTI -> true
-        ATTESA -> s == StatoRiparazione.IN_ATTESA
+    fun matches(s: StatoRiparazione) = when (this) {
+        TUTTI -> true; ATTESA -> s == StatoRiparazione.IN_ATTESA
         LAVORAZIONE -> s == StatoRiparazione.IN_LAVORAZIONE
-        PRONTI -> s == StatoRiparazione.PRONTO
-        CONSEGNATI -> s == StatoRiparazione.CONSEGNATO
+        PRONTI -> s == StatoRiparazione.PRONTO; CONSEGNATI -> s == StatoRiparazione.CONSEGNATO
     }
 }
 
-class RiparazioneViewModel(
-    private val repo: RiparazioneRepository
-) : ViewModel() {
+class RiparazioneViewModel(private val repo: RiparazioneRepository) : ViewModel() {
 
-    // SharedFlow per comunicare il cliente appena creato/selezionato alla schermata riparazione
-    private val _clienteAppenaCreato = MutableSharedFlow<String>(replay = 1)
-    val clienteAppenaCreato: SharedFlow<String> = _clienteAppenaCreato
+    // ─── STATO EDITING (sopravvive alla distruzione Activity) ───────────────────
+    private val _ripInEditing = MutableStateFlow<Riparazione?>(null)
+    val ripInEditing: StateFlow<Riparazione?> = _ripInEditing
+    fun iniziaEditing(r: Riparazione) { _ripInEditing.value = r }
+    fun aggiornaEditing(r: Riparazione) { _ripInEditing.value = r }
+    fun terminaEditing() { _ripInEditing.value = null }
 
-    fun segnalaClienteCreato(nome: String, telefono: String) {
-        viewModelScope.launch {
-            _clienteAppenaCreato.emit("$nome|||$telefono")
-        }
-    }
-
-    fun resetClienteCreato() {
-        _clienteAppenaCreato.resetReplayCache()
-    }
-
-    // ─── RUBRICA CLIENTI STANDALONE ─────────────────────────────────────────────
-    // Clienti "puri" (non ancora associati a nessuna riparazione) salvati in memoria.
-    // Vengono uniti ai clienti derivati dalle riparazioni nell'AnagraficaClienteScreen.
-
-    private val _clientiExtra = MutableStateFlow<List<ExportUtil.ClienteInfo>>(emptyList())
-    val clientiExtra: StateFlow<List<ExportUtil.ClienteInfo>> = _clientiExtra
-
-    fun aggiungiClienteExtra(nome: String, telefono: String) {
-        val nomeTrimmed = nome.trim()
-        if (nomeTrimmed.isBlank()) return
-        val lista = _clientiExtra.value.toMutableList()
-        val idx = lista.indexOfFirst { it.nome.equals(nomeTrimmed, ignoreCase = true) }
-        if (idx >= 0) lista[idx] = ExportUtil.ClienteInfo(nomeTrimmed, telefono.trim())
-        else lista.add(ExportUtil.ClienteInfo(nomeTrimmed, telefono.trim()))
-        _clientiExtra.value = lista.sortedBy { it.nome }
-    }
-
-    fun aggiornaClienteExtra(vecchioNome: String, nuovoNome: String, nuovoTelefono: String) {
-        val lista = _clientiExtra.value.toMutableList()
-        val idx = lista.indexOfFirst { it.nome == vecchioNome }
-        if (idx >= 0) lista[idx] = ExportUtil.ClienteInfo(nuovoNome.trim(), nuovoTelefono.trim())
-        _clientiExtra.value = lista.sortedBy { it.nome }
-    }
-
-    fun rimuoviClienteExtra(nome: String) {
-        _clientiExtra.value = _clientiExtra.value.filter { it.nome != nome }
-    }
-
-    /** Carica clienti extra da un import ZIP (clienti.csv). */
-    fun importaClientiExtra(clienti: List<ExportUtil.ClienteInfo>) {
-        val existing = _clientiExtra.value.toMutableList()
-        clienti.forEach { c ->
-            if (c.nome.isNotBlank() && existing.none { it.nome.equals(c.nome, ignoreCase = true) })
-                existing.add(c)
-        }
-        _clientiExtra.value = existing.sortedBy { it.nome }
-    }
-
-    private val _query = MutableStateFlow("")
-    val query: StateFlow<String> = _query
-
+    // ─── FILTRI LISTA ────────────────────────────────────────────────────────────
+    private val _query  = MutableStateFlow("")
     private val _filtro = MutableStateFlow(FiltroStato.TUTTI)
+    val query:  StateFlow<String>      = _query
     val filtro: StateFlow<FiltroStato> = _filtro
+    fun setQuery(q: String)       { _query.value = q }
+    fun setFiltro(f: FiltroStato) { _filtro.value = f }
 
     val tutte: StateFlow<List<Riparazione>> = repo.all()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val filtrate: StateFlow<List<Riparazione>> = combine(repo.all(), _query, _filtro) { lista, q, f ->
-        lista.filter { r ->
-            f.matches(r.stato) && (
-                q.isEmpty() ||
-                r.cliente.contains(q, ignoreCase = true) ||
-                r.marcaModello.contains(q, ignoreCase = true) ||
-                r.numeroProgressivo.contains(q, ignoreCase = true)
-            )
+    val filtrate: StateFlow<List<Riparazione>> =
+        combine(repo.all(), _query, _filtro) { lista, q, f ->
+            lista.filter { r ->
+                f.matches(r.stato) && (q.isEmpty() ||
+                    r.cliente.contains(q, ignoreCase = true) ||
+                    r.marcaModello.contains(q, ignoreCase = true) ||
+                    r.numeroProgressivo.contains(q, ignoreCase = true))
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ─── CLIENTI ────────────────────────────────────────────────────────────────
+    val clienti: StateFlow<List<Cliente>> = repo.allClienti()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _queryClienti = MutableStateFlow("")
+    val queryClienti: StateFlow<String> = _queryClienti
+    fun setQueryClienti(q: String) { _queryClienti.value = q }
+
+    val clientiFiltrati: StateFlow<List<Cliente>> =
+        combine(repo.allClienti(), _queryClienti) { lista, q ->
+            if (q.isEmpty()) lista
+            else lista.filter {
+                it.nome.contains(q, ignoreCase = true) ||
+                it.cognome.contains(q, ignoreCase = true) ||
+                it.telefono.contains(q, ignoreCase = true)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun riparazioniByCliente(id: Long): Flow<List<Riparazione>> = repo.byClienteId(id)
+
+    suspend fun clienteById(id: Long) = repo.clienteById(id)
+
+    fun salvaCliente(c: Cliente, onDone: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            val id = if (c.id == 0L) repo.insertCliente(c) else { repo.updateCliente(c); c.id }
+            onDone(id)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
 
-    fun setQuery(q: String) { _query.value = q }
-    fun setFiltro(f: FiltroStato) { _filtro.value = f }
+    fun eliminaCliente(c: Cliente) { viewModelScope.launch { repo.deleteCliente(c) } }
 
+    // ─── RIPARAZIONI ────────────────────────────────────────────────────────────
     suspend fun byId(id: Long) = repo.byId(id)
-    suspend fun nuovoProgressivo(): String = repo.generaProgressivo()
+    suspend fun nuovoProgressivo() = repo.generaProgressivo()
 
-    // ─── TIMER LAVORO (modifica 2) ──────────────────────────────────────────────
-
-    /**
-     * Applica la logica timer al cambio stato:
-     * - IN_LAVORAZIONE: avvia il timer
-     * - tutti gli altri: ferma il timer e accumula il tempo
-     */
     fun applicaCambioStato(r: Riparazione, nuovoStato: StatoRiparazione): Riparazione {
         val now = System.currentTimeMillis()
         return when (nuovoStato) {
-            StatoRiparazione.IN_LAVORAZIONE -> {
+            StatoRiparazione.IN_LAVORAZIONE ->
                 if (r.timerAvviatoAl == null) r.copy(stato = nuovoStato, timerAvviatoAl = now)
                 else r.copy(stato = nuovoStato)
-            }
             StatoRiparazione.PRONTO -> {
                 val extra = if (r.timerAvviatoAl != null) now - r.timerAvviatoAl else 0L
                 r.copy(stato = nuovoStato, timerAvviatoAl = null,
-                    tempoLavoroMs = r.tempoLavoroMs + extra,
-                    dataPronto = r.dataPronto ?: now, dataConsegna = null)
+                    tempoLavoroMs = r.tempoLavoroMs + extra, dataPronto = r.dataPronto ?: now, dataConsegna = null)
             }
             StatoRiparazione.CONSEGNATO -> {
                 val extra = if (r.timerAvviatoAl != null) now - r.timerAvviatoAl else 0L
                 r.copy(stato = nuovoStato, timerAvviatoAl = null,
-                    tempoLavoroMs = r.tempoLavoroMs + extra,
-                    dataPronto = r.dataPronto ?: now,
-                    dataConsegna = r.dataConsegna ?: now)
+                    tempoLavoroMs = r.tempoLavoroMs + extra, dataPronto = r.dataPronto ?: now, dataConsegna = r.dataConsegna ?: now)
             }
             StatoRiparazione.IN_ATTESA -> {
                 val extra = if (r.timerAvviatoAl != null) now - r.timerAvviatoAl else 0L
-                r.copy(stato = nuovoStato, timerAvviatoAl = null,
-                    tempoLavoroMs = r.tempoLavoroMs + extra)
+                r.copy(stato = nuovoStato, timerAvviatoAl = null, tempoLavoroMs = r.tempoLavoroMs + extra)
             }
         }
     }
 
-    /** Tempo effettivo corrente includendo sessione in corso */
     fun tempoEffettivo(r: Riparazione): Long {
         val extra = if (r.timerAvviatoAl != null) System.currentTimeMillis() - r.timerAvviatoAl else 0L
         return r.tempoLavoroMs + extra
     }
-
-    // ─── CRUD ───────────────────────────────────────────────────────────────────
 
     fun salva(r: Riparazione, onDone: (Long) -> Unit = {}) {
         viewModelScope.launch {
@@ -161,51 +115,34 @@ class RiparazioneViewModel(
     }
 
     fun elimina(r: Riparazione) { viewModelScope.launch { repo.delete(r) } }
-
     fun eliminaMultiple(rips: List<Riparazione>) { viewModelScope.launch { repo.deleteMany(rips) } }
+    fun eliminaTutte(onDone: () -> Unit = {}) { viewModelScope.launch { repo.deleteAll(tutte.value); onDone() } }
+    fun eliminaFiltrate(onDone: () -> Unit = {}) { viewModelScope.launch { repo.deleteMany(filtrate.value); onDone() } }
 
-    fun eliminaTutte(onDone: () -> Unit = {}) {
-        viewModelScope.launch { repo.deleteAll(tutte.value); onDone() }
-    }
-
-    fun eliminaFiltrate(onDone: () -> Unit = {}) {
-        viewModelScope.launch { repo.deleteMany(filtrate.value); onDone() }
-    }
-
-    // ─── IMPORT CSV (modifica 4) ─────────────────────────────────────────────────
-
-    /** Importazione totale: cancella tutto e reimporta */
     suspend fun importaTotale(righe: List<Riparazione>): Triple<Int, Int, Int> {
-        repo.deleteAll(tutte.value)
-        var ins = 0
-        righe.forEach { r -> repo.insert(r.copy(id = 0)); ins++ }
+        repo.deleteAll(tutte.value); var ins = 0
+        righe.forEach { repo.insert(it.copy(id = 0)); ins++ }
         return Triple(righe.size, ins, 0)
     }
-
-    /** Aggiuntiva: sovrascrive i duplicati per numero progressivo */
     suspend fun importaAggiuntivaSovrascrivi(righe: List<Riparazione>): Triple<Int, Int, Int> {
-        var nuovi = 0; var aggiornati = 0
+        var nuovi = 0; var agg = 0
         righe.forEach { r ->
-            val esistente = repo.byProgressivo(r.numeroProgressivo)
-            if (esistente != null) { repo.update(r.copy(id = esistente.id)); aggiornati++ }
-            else { repo.insert(r.copy(id = 0)); nuovi++ }
+            val e = repo.byProgressivo(r.numeroProgressivo)
+            if (e != null) { repo.update(r.copy(id = e.id)); agg++ } else { repo.insert(r.copy(id = 0)); nuovi++ }
         }
-        return Triple(righe.size, nuovi, aggiornati)
+        return Triple(righe.size, nuovi, agg)
     }
-
-    /** Aggiuntiva: salta i duplicati, crea nuovi record con ID diverso */
     suspend fun importaAggiuntivaIgnora(righe: List<Riparazione>): Triple<Int, Int, Int> {
-        var nuovi = 0; var saltati = 0
+        var nuovi = 0; var salt = 0
         righe.forEach { r ->
-            val esistente = repo.byProgressivo(r.numeroProgressivo)
-            if (esistente != null) saltati++
+            if (repo.byProgressivo(r.numeroProgressivo) != null) salt++
             else { repo.insert(r.copy(id = 0)); nuovi++ }
         }
-        return Triple(righe.size, nuovi, saltati)
+        return Triple(righe.size, nuovi, salt)
     }
 }
 
 class RiparazioneVMFactory(private val repo: RiparazioneRepository) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T = RiparazioneViewModel(repo) as T
+    override fun <T : ViewModel> create(modelClass: Class<T>) = RiparazioneViewModel(repo) as T
 }

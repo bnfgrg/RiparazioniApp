@@ -6,5 +6,7 @@ import it.officina.riparazioni.data.RiparazioneRepository
 
 class RiparazioniApp : Application() {
     val database by lazy { AppDatabase.getInstance(this) }
-    val repository by lazy { RiparazioneRepository(database.riparazioneDao()) }
+    val repository by lazy {
+        RiparazioneRepository(database.riparazioneDao(), database.clienteDao())
+    }
 }

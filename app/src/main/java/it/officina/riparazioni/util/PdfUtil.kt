@@ -11,7 +11,12 @@ import java.io.FileOutputStream
 
 object PdfUtil {
 
+    /**
+     * Genera un PDF formato A6 (105x148 mm) con i dati essenziali della riparazione.
+     * Ritorna il file generato.
+     */
     fun generaEtichetta(ctx: Context, r: Riparazione): File {
+        // A6 in punti (1 pollice = 72 punti). 105mm = 297pt, 148mm = 420pt
         val w = 297
         val h = 420
 
@@ -20,59 +25,93 @@ object PdfUtil {
         val page = doc.startPage(info)
         val canvas = page.canvas
 
-        val titlePaint = Paint().apply { isAntiAlias = true; textSize = 22f; isFakeBoldText = true }
-        val labelPaint = Paint().apply { isAntiAlias = true; textSize = 11f; color = android.graphics.Color.GRAY }
-        val valuePaint = Paint().apply { isAntiAlias = true; textSize = 16f }
-        val numPaint   = Paint().apply { isAntiAlias = true; textSize = 28f; isFakeBoldText = true }
-        val borderPaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1.5f; color = android.graphics.Color.BLACK }
-
-        val marginL = 30f
-        val maxWidth = (w - marginL - 15).toFloat()
-
-        canvas.drawRect(15f, 15f, (w - 15).toFloat(), (h - 15).toFloat(), borderPaint)
-        canvas.drawText("RIPARAZIONE", marginL, 50f, titlePaint)
-        canvas.drawText("#${r.numeroProgressivo}", marginL, 90f, numPaint)
-
-        var y = 140f
-
-        fun drawWrappedText(text: String, paint: Paint, maxY: Float): Float {
-            val words = text.split(" ")
-            val lines = mutableListOf<String>()
-            var current = ""
-            for (word in words) {
-                val test = if (current.isEmpty()) word else "$current $word"
-                if (paint.measureText(test) <= maxWidth) {
-                    current = test
-                } else {
-                    if (current.isNotEmpty()) lines.add(current)
-                    current = word
-                }
-            }
-            if (current.isNotEmpty()) lines.add(current)
-
-            var curY = y
-            for ((idx, line) in lines.withIndex()) {
-                val nextY = curY + paint.textSize + 4f
-                if (nextY > maxY && idx < lines.size - 1) {
-                    // Troncamento con "..." come ultima risorsa
-                    var truncated = line
-                    while (paint.measureText("$truncated…") > maxWidth && truncated.length > 1) {
-                        truncated = truncated.dropLast(1)
-                    }
-                    canvas.drawText("$truncated…", marginL, curY, paint)
-                    curY = nextY
-                    break
-                }
-                canvas.drawText(line, marginL, curY, paint)
-                curY = nextY
-            }
-            return curY
+        val titlePaint = Paint().apply {
+            isAntiAlias = true
+            textSize = 22f
+            isFakeBoldText = true
+        }
+        val labelPaint = Paint().apply {
+            isAntiAlias = true
+            textSize = 11f
+            color = android.graphics.Color.GRAY
+        }
+        val valuePaint = Paint().apply {
+            isAntiAlias = true
+            textSize = 16f
+        }
+        val numPaint = Paint().apply {
+            isAntiAlias = true
+            textSize = 28f
+            isFakeBoldText = true
+        }
+        val borderPaint = Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f
+            color = android.graphics.Color.BLACK
         }
 
-        fun riga(label: String, value: String, maxY: Float = (h - 70).toFloat()) {
-            canvas.drawText(label.uppercase(), marginL, y, labelPaint)
+        // Cornice
+        canvas.drawRect(15f, 15f, (w - 15).toFloat(), (h - 15).toFloat(), borderPaint)
+
+        // Titolo
+        canvas.drawText("RIPARAZIONE", 30f, 50f, titlePaint)
+
+        // Numero progressivo grande
+        canvas.drawText("#${r.numeroProgressivo}", 30f, 90f, numPaint)
+
+        // Larghezza massima testo (margini 30px + 30px su 297px totali)
+        val maxTextWidth = (w - 60).toFloat()
+        val maxY = (h - 70).toFloat() // lascia spazio per stato in basso
+
+        /**
+         * Disegna testo con word-wrap automatico.
+         * Se il testo non entra verticalmente, tronca con "…".
+         * Ritorna la nuova y dopo il testo.
+         */
+        fun drawWrappedText(text: String, paint: Paint, startY: Float): Float {
+            val words = text.split(" ")
+            val lines = mutableListOf<String>()
+            var currentLine = ""
+            for (word in words) {
+                val candidate = if (currentLine.isEmpty()) word else "$currentLine $word"
+                if (paint.measureText(candidate) <= maxTextWidth) {
+                    currentLine = candidate
+                } else {
+                    if (currentLine.isNotEmpty()) lines.add(currentLine)
+                    currentLine = word
+                }
+            }
+            if (currentLine.isNotEmpty()) lines.add(currentLine)
+
+            var cy = startY
+            val lineHeight = paint.textSize * 1.3f
+            for ((i, line) in lines.withIndex()) {
+                if (cy + lineHeight > maxY) {
+                    // Troncamento: sostituisci l'ultima riga con "…"
+                    if (i > 0) {
+                        val prev = lines[i - 1]
+                        var truncated = prev
+                        while (paint.measureText("$truncated…") > maxTextWidth && truncated.isNotEmpty()) {
+                            truncated = truncated.dropLast(1)
+                        }
+                        // Ridisegna la riga precedente troncata (sovrascrivi)
+                        canvas.drawText("$truncated…", 30f, cy - lineHeight, paint)
+                    }
+                    break
+                }
+                canvas.drawText(line, 30f, cy, paint)
+                cy += lineHeight
+            }
+            return cy
+        }
+
+        var y = 140f
+        fun riga(label: String, value: String) {
+            if (y >= maxY) return
+            canvas.drawText(label.uppercase(), 30f, y, labelPaint)
             y += 18f
-            y = drawWrappedText(value.ifEmpty { "—" }, valuePaint, maxY) + 10f
+            y = drawWrappedText(value.ifEmpty { "—" }, valuePaint, y)
+            y += 10f
         }
 
         riga("Cliente", r.cliente)
@@ -81,8 +120,9 @@ object PdfUtil {
         if (r.problema.isNotEmpty()) riga("Problema", r.problema)
         riga("Data ingresso", DateFmt.full(r.dataIngresso))
 
+        // Stato in basso, evidenziato
         val statoY = (h - 50).toFloat()
-        canvas.drawText("STATO: ${r.stato.label.uppercase()}", marginL, statoY, valuePaint)
+        canvas.drawText("STATO: ${r.stato.label.uppercase()}", 30f, statoY, valuePaint)
 
         doc.finishPage(page)
 
@@ -90,9 +130,11 @@ object PdfUtil {
         val file = File(outDir, "etichetta_${r.numeroProgressivo}.pdf")
         FileOutputStream(file).use { doc.writeTo(it) }
         doc.close()
+
         return file
     }
 
+    /** Apre il chooser di sistema per condividere/stampare il PDF. */
     fun condividi(ctx: Context, file: File) {
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {

@@ -1,417 +1,283 @@
 package it.officina.riparazioni.ui.screens
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import it.officina.riparazioni.data.Cliente
+import it.officina.riparazioni.data.Riparazione
 import it.officina.riparazioni.ui.RiparazioneViewModel
-import it.officina.riparazioni.util.ExportUtil
-import kotlinx.coroutines.launch
+import it.officina.riparazioni.ui.components.ConfermaDialog
+import it.officina.riparazioni.ui.components.PallinoStato
+import it.officina.riparazioni.ui.theme.ColorDanger
+import it.officina.riparazioni.util.DateFmt
+
+// ─── SCHERMATA LISTA CLIENTI ─────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnagraficaClienteScreen(
+fun AnagraficaListaScreen(
     vm: RiparazioneViewModel,
-    fromRiparazione: Boolean = false,
+    onApriCliente: (Long) -> Unit,
+    onNuovoCliente: () -> Unit,
     onIndietro: () -> Unit
 ) {
-    val tutte by vm.tutte.collectAsStateWithLifecycle()
-    val clientiExtra by vm.clientiExtra.collectAsStateWithLifecycle()
-
-    // Clienti derivati dalle riparazioni (nome → telefono più recente)
-    val clientiDaRip: List<ExportUtil.ClienteInfo> = remember(tutte) {
-        tutte
-            .filter { it.cliente.isNotBlank() }
-            .groupBy { it.cliente.trim() }
-            .map { (nome, rips) ->
-                val telefono = rips.maxByOrNull { it.dataIngresso }?.telefono ?: ""
-                ExportUtil.ClienteInfo(nome, telefono)
-            }
-    }
-
-    // Lista unificata: clienti da riparazioni + clienti extra (senza duplicati)
-    val clientiDistinti: List<ExportUtil.ClienteInfo> = remember(clientiDaRip, clientiExtra) {
-        val nomiDaRip = clientiDaRip.map { it.nome.trim().lowercase() }.toSet()
-        val extra = clientiExtra.filter { it.nome.trim().lowercase() !in nomiDaRip }
-        (clientiDaRip + extra).sortedBy { it.nome }
-    }
-
-    // Stato dialogs
-    var mostraDialogNuovo by remember { mutableStateOf(false) }
-    var nomeNuovo by remember { mutableStateOf("") }
-    var telNuovo by remember { mutableStateOf("") }
-
-    var clienteDaModificare by remember { mutableStateOf<ExportUtil.ClienteInfo?>(null) }
-    var nomeModifica by remember { mutableStateOf("") }
-    var telModifica by remember { mutableStateOf("") }
-
-    var clienteDaEliminare by remember { mutableStateOf<ExportUtil.ClienteInfo?>(null) }
-
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val clienti by vm.clientiFiltrati.collectAsStateWithLifecycle()
+    val query   by vm.queryClienti.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (fromRiparazione) "Seleziona cliente" else "Rubrica clienti") },
+                title = { Text("Anagrafica clienti") },
                 navigationIcon = {
-                    IconButton(onClick = onIndietro) {
-                        Icon(Icons.Default.ArrowBack, "Indietro")
-                    }
+                    IconButton(onClick = onIndietro) { Icon(Icons.Default.ArrowBack, "Indietro") }
                 }
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { nomeNuovo = ""; telNuovo = ""; mostraDialogNuovo = true },
+                onClick = onNuovoCliente,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Default.Add, "Nuovo cliente")
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbar) }
+            ) { Icon(Icons.Default.Add, "Nuovo cliente") }
+        }
     ) { padding ->
-        if (clientiDistinti.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Nessun cliente in rubrica",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Usa il pulsante + per aggiungere un cliente",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { vm.setQueryClienti(it) },
+                placeholder = { Text("Cerca per nome, cognome, telefono…") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            if (clienti.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Nessun cliente", style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Tocca + per aggiungerne uno", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-            }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(clientiDistinti, key = { it.nome }) { c ->
-                    val isDismissState = rememberSwipeToDismissBoxState(
-                        confirmValueChange = { dismissValue ->
-                            if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
-                                clienteDaEliminare = c
-                                false // non dismissare subito: aspetta conferma
-                            } else false
-                        }
-                    )
-                    SwipeToDismissBox(
-                        state = isDismissState,
-                        backgroundContent = {
-                            val color by animateColorAsState(
-                                targetValue = if (isDismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart)
-                                    MaterialTheme.colorScheme.errorContainer
-                                else Color.Transparent,
-                                label = "swipe_color"
-                            )
-                            Box(
-                                Modifier.fillMaxSize().background(color).padding(end = 20.dp),
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Icon(Icons.Default.Delete, "Elimina",
-                                    tint = MaterialTheme.colorScheme.onErrorContainer)
-                            }
-                        },
-                        enableDismissFromStartToEnd = false,
-                        enableDismissFromEndToStart = true
-                    ) {
-                        RigaCliente(
-                            cliente = c,
-                            fromRiparazione = fromRiparazione,
-                            onSeleziona = {
-                                vm.segnalaClienteCreato(c.nome, c.telefono)
-                                onIndietro()
-                            },
-                            onModifica = {
-                                nomeModifica = c.nome
-                                telModifica = c.telefono
-                                clienteDaModificare = c
-                            }
-                        )
+            } else {
+                LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+                    items(clienti, key = { it.id }) { c ->
+                        CardCliente(c = c, onClick = { onApriCliente(c.id) })
                     }
                 }
             }
         }
     }
+}
 
-    // ─── Dialog: Nuovo cliente ───────────────────────────────────────────────────
-    if (mostraDialogNuovo) {
-        AlertDialog(
-            onDismissRequest = { mostraDialogNuovo = false },
-            title = { Text("Nuovo cliente") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = nomeNuovo, onValueChange = { nomeNuovo = it },
-                        label = { Text("Nome *") },
-                        singleLine = true, modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = telNuovo, onValueChange = { telNuovo = it },
-                        label = { Text("Telefono") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val nome = nomeNuovo.trim()
-                        val tel = telNuovo.trim()
-                        if (nome.isNotBlank()) {
-                            if (fromRiparazione) {
-                                // Seleziona subito e torna alla riparazione
-                                vm.segnalaClienteCreato(nome, tel)
-                                mostraDialogNuovo = false
-                                onIndietro()
-                            } else {
-                                // Salva in rubrica standalone
-                                vm.aggiungiClienteExtra(nome, tel)
-                                mostraDialogNuovo = false
-                                scope.launch { snackbar.showSnackbar("Cliente \"$nome\" aggiunto alla rubrica") }
-                            }
-                        }
-                    },
-                    enabled = nomeNuovo.isNotBlank()
-                ) {
-                    Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (fromRiparazione) "Seleziona" else "Aggiungi")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostraDialogNuovo = false }) { Text("Annulla") }
+@Composable
+private fun CardCliente(c: Cliente, onClick: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
+        elevation = CardDefaults.cardElevation(0.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Avatar iniziali
+            Box(
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                val iniziali = "${c.nome.firstOrNull() ?: ""}${c.cognome.firstOrNull() ?: ""}".uppercase()
+                Text(iniziali, style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary)
             }
-        )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(c.nomeCompleto.ifEmpty { "Senza nome" },
+                    fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyLarge)
+                if (c.telefono.isNotEmpty())
+                    Text(c.telefono, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (c.indirizzo.isNotEmpty())
+                    Text(c.indirizzo, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(MaterialTheme.colorScheme.surfaceVariant))
+    }
+}
+
+// ─── SCHERMATA DETTAGLIO CLIENTE ──────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AnagraficaDettaglioScreen(
+    vm: RiparazioneViewModel,
+    clienteId: Long?,   // null = nuovo
+    onIndietro: () -> Unit,
+    onApriRiparazione: (Long) -> Unit
+) {
+    var cliente by remember { mutableStateOf<Cliente?>(null) }
+    var caricato by remember { mutableStateOf(false) }
+    var mostraConfermaElimina by remember { mutableStateOf(false) }
+    val riparazioni = remember { mutableStateOf<List<Riparazione>>(emptyList()) }
+
+    LaunchedEffect(clienteId) {
+        cliente = if (clienteId == null || clienteId == 0L) Cliente()
+                  else vm.clienteById(clienteId) ?: Cliente()
+        caricato = true
     }
 
-    // ─── Dialog: Modifica cliente ────────────────────────────────────────────────
-    clienteDaModificare?.let { c ->
-        AlertDialog(
-            onDismissRequest = { clienteDaModificare = null },
-            title = { Text("Modifica cliente") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = nomeModifica, onValueChange = { nomeModifica = it },
-                        label = { Text("Nome *") },
-                        singleLine = true, modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = telModifica, onValueChange = { telModifica = it },
-                        label = { Text("Telefono") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val nuovoNome = nomeModifica.trim()
-                        val nuovoTel = telModifica.trim()
-                        if (nuovoNome.isNotBlank()) {
-                            // Se il cliente proviene da riparazioni non possiamo modificarlo
-                            // direttamente nel DB — l'aggiornamento si fa solo sui clientiExtra.
-                            // Per i clienti da riparazioni mostriamo un messaggio informativo.
-                            val isDaRip = tutte.any { it.cliente.trim() == c.nome }
-                            if (isDaRip) {
-                                // Aggiorna comunque il record extra (o crea uno override)
-                                vm.aggiungiClienteExtra(nuovoNome, nuovoTel)
-                                if (nuovoNome != c.nome) vm.rimuoviClienteExtra(c.nome)
-                                scope.launch {
-                                    snackbar.showSnackbar("Nota: il nome nelle riparazioni esistenti non cambia")
-                                }
-                            } else {
-                                vm.aggiornaClienteExtra(c.nome, nuovoNome, nuovoTel)
-                            }
-                            clienteDaModificare = null
-                        }
-                    },
-                    enabled = nomeModifica.isNotBlank()
-                ) {
-                    Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Salva")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { clienteDaModificare = null }) { Text("Annulla") }
-            }
-        )
+    // Raccoglie le riparazioni del cliente
+    val ripsFlow = remember(clienteId) {
+        if (clienteId != null && clienteId != 0L) vm.riparazioniByCliente(clienteId)
+        else kotlinx.coroutines.flow.flowOf(emptyList())
+    }
+    val rips by ripsFlow.collectAsStateWithLifecycle(emptyList())
+
+    if (!caricato || cliente == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Caricamento…") }
+        return
     }
 
-    // ─── Dialog: Conferma eliminazione ──────────────────────────────────────────
-    clienteDaEliminare?.let { c ->
-        AlertDialog(
-            onDismissRequest = { clienteDaEliminare = null },
-            title = { Text("Elimina cliente") },
-            text = {
-                val isDaRip = tutte.any { it.cliente.trim() == c.nome }
-                if (isDaRip) {
-                    Text("\"${c.nome}\" è associato a delle riparazioni e non può essere eliminato dalla rubrica. Puoi eliminare le riparazioni associate dalla schermata principale.")
-                } else {
-                    Text("Eliminare \"${c.nome}\" dalla rubrica?")
+    val c = cliente!!
+    fun aggiorna(nuovo: Cliente) { cliente = nuovo }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (clienteId == null || clienteId == 0L) "Nuovo cliente" else c.nomeCompleto.ifEmpty { "Cliente" }) },
+                navigationIcon = {
+                    IconButton(onClick = onIndietro) { Icon(Icons.Default.ArrowBack, "Indietro") }
                 }
-            },
-            confirmButton = {
-                val isDaRip = tutte.any { it.cliente.trim() == c.nome }
-                if (!isDaRip) {
-                    TextButton(
-                        onClick = {
-                            vm.rimuoviClienteExtra(c.nome)
-                            clienteDaEliminare = null
-                        }
-                    ) {
-                        Text("Elimina", color = MaterialTheme.colorScheme.error)
-                    }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding)
+                .verticalScroll(rememberScrollState()).padding(16.dp)
+        ) {
+            // ─── DATI ANAGRAFICI ─────────────────────────────────────────────
+            EtichettaCampoC("Nome")
+            OutlinedTextField(value = c.nome, onValueChange = { aggiorna(c.copy(nome = it)) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+
+            Spacer(Modifier.height(10.dp))
+            EtichettaCampoC("Cognome")
+            OutlinedTextField(value = c.cognome, onValueChange = { aggiorna(c.copy(cognome = it)) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+
+            Spacer(Modifier.height(10.dp))
+            EtichettaCampoC("Telefono")
+            OutlinedTextField(value = c.telefono, onValueChange = { aggiorna(c.copy(telefono = it)) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+
+            Spacer(Modifier.height(10.dp))
+            EtichettaCampoC("Indirizzo")
+            OutlinedTextField(value = c.indirizzo, onValueChange = { aggiorna(c.copy(indirizzo = it)) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+
+            Spacer(Modifier.height(10.dp))
+            EtichettaCampoC("Note")
+            OutlinedTextField(value = c.note, onValueChange = { aggiorna(c.copy(note = it)) },
+                modifier = Modifier.fillMaxWidth().height(80.dp))
+
+            Spacer(Modifier.height(20.dp))
+
+            // ─── SALVA ────────────────────────────────────────────────────────
+            Button(
+                onClick = { vm.salvaCliente(c) { onIndietro() } },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Salva") }
+
+            // ─── RIPARAZIONI ASSOCIATE ────────────────────────────────────────
+            if (clienteId != null && clienteId != 0L && rips.isNotEmpty()) {
+                Spacer(Modifier.height(24.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(MaterialTheme.colorScheme.surfaceVariant))
+                Spacer(Modifier.height(16.dp))
+                Text("Riparazioni associate (${rips.size})",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(8.dp))
+                rips.forEach { r ->
+                    CardRiparazioneCompatta(r = r, onClick = { onApriRiparazione(r.id) })
+                    Spacer(Modifier.height(6.dp))
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { clienteDaEliminare = null }) { Text("Chiudi") }
             }
+
+            // ─── ELIMINA ──────────────────────────────────────────────────────
+            if (clienteId != null && clienteId != 0L) {
+                Spacer(Modifier.height(24.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(MaterialTheme.colorScheme.surfaceVariant))
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = { mostraConfermaElimina = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ColorDanger),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(8.dp)); Text("Elimina cliente")
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    if (mostraConfermaElimina) {
+        ConfermaDialog(
+            titolo = "Eliminare il cliente?",
+            testo = "Il cliente verrà rimosso dall'anagrafica. Le riparazioni associate rimarranno ma perderanno il collegamento al cliente.",
+            sottoinfo = c.nomeCompleto,
+            confermaLabel = "Elimina",
+            onConferma = { vm.eliminaCliente(c); mostraConfermaElimina = false; onIndietro() },
+            onAnnulla = { mostraConfermaElimina = false }
         )
     }
 }
 
 @Composable
-private fun RigaCliente(
-    cliente: ExportUtil.ClienteInfo,
-    fromRiparazione: Boolean,
-    onSeleziona: () -> Unit,
-    onModifica: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = if (fromRiparazione) onSeleziona else onModifica)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+private fun CardRiparazioneCompatta(r: Riparazione, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
-        // Avatar iniziale
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = cliente.nome.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        // Nome e telefono
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                cliente.nome,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            if (cliente.telefono.isNotBlank()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Phone, null,
-                        modifier = Modifier.size(12.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        cliente.telefono,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("#${r.numeroProgressivo}  ${r.tipoDispositivo.label}",
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                if (r.marcaModello.isNotEmpty())
+                    Text(r.marcaModello, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(DateFmt.full(r.dataIngresso), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        }
-
-        // Icona azione a destra
-        if (fromRiparazione) {
-            Icon(
-                Icons.Default.ArrowForward, "Seleziona",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        } else {
-            IconButton(onClick = onModifica, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    Icons.Default.Edit, "Modifica",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            PallinoStato(r.stato)
         }
     }
-    Box(
-        modifier = Modifier.fillMaxWidth().height(0.5.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-    )
+}
+
+@Composable
+private fun EtichettaCampoC(text: String) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp))
 }
